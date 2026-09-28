@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Ocorrências · FaultTrace{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div><h1 class="h2 mb-1">Ocorrências</h1><p class="text-body-secondary mb-0">Registro e acompanhamento operacional.</p></div>
+    <a class="btn btn-primary" href="{% url 'incident_create' %}">Nova ocorrência</a>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0">
+    <thead><tr><th>#</th><th>Equipamento</th><th>Status</th><th>Data</th></tr></thead>
+    <tbody>{% for incident in incidents %}<tr><td><a href="{% url 'incident_detail' incident.pk %}">#{{ incident.pk }}</a></td><td>{{ incident.equipment }}</td><td>{{ incident.get_status_display }}</td><td>{{ incident.occurred_at|date:"d/m/Y H:i" }}</td></tr>{% empty %}<tr><td colspan="4" class="text-center py-4 text-body-secondary">Nenhuma ocorrência registrada.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}
+

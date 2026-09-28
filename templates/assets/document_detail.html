@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}{{ document.title }} · FaultTrace{% endblock %}
+
+{% block content %}
+<a href="{% url 'document_list' %}" class="text-decoration-none">← Documentos</a>
+<h1 class="h2 mt-2">{{ document.title }}</h1>
+<div class="card mt-4"><div class="card-body">
+    <p>{{ document.description|default:"Sem descrição."|linebreaksbr }}</p>
+    <p><a class="btn btn-outline-primary" href="{% url 'document_download' document.pk %}" target="_blank">Abrir arquivo</a></p>
+    <h2 class="h5 mt-4">Equipamentos relacionados</h2>
+    <ul class="mb-0">{% for equipment in document.equipments.all %}<li><a href="{% url 'equipment_detail' equipment.pk %}">{{ equipment }}</a></li>{% empty %}<li>Nenhum equipamento associado.</li>{% endfor %}</ul>
+</div></div>
+{% endblock %}

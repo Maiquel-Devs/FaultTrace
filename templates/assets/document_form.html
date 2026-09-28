@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Enviar documento · FaultTrace{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8">
+    <h1 class="h2 mb-4">Enviar documento</h1>
+    <form method="post" enctype="multipart/form-data" class="card card-body fault-form">
+        {% csrf_token %}{{ form.as_p }}
+        <div><button class="btn btn-primary" type="submit">Enviar</button> <a class="btn btn-link" href="{% url 'document_list' %}">Cancelar</a></div>
+    </form>
+</div></div>
+{% endblock %}
+

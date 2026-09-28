@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Ocorrência #{{ incident.pk }} · FaultTrace{% endblock %}
+
+{% block content %}
+<a href="{% url 'incident_list' %}" class="text-decoration-none">← Ocorrências</a>
+<div class="d-flex justify-content-between align-items-start mt-2 mb-4">
+    <div><h1 class="h2">Ocorrência #{{ incident.pk }}</h1><p class="mb-0"><a href="{% url 'equipment_detail' incident.equipment.pk %}">{{ incident.equipment }}</a></p></div>
+    <span class="badge text-bg-secondary fs-6">{{ incident.get_status_display }}</span>
+</div>
+<div class="card mb-4"><div class="card-body">
+    <h2 class="h5">Descrição</h2><p>{{ incident.description|linebreaksbr }}</p>
+    <small class="text-body-secondary">Registrada por {{ incident.reported_by }} em {{ incident.occurred_at|date:"d/m/Y H:i" }}</small>
+</div></div>
+
+<section class="card mb-4"><div class="card-body">
+    <h2 class="h4">Investigação</h2>
+    {% if investigation %}
+        <dl class="row mb-0"><dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ investigation.get_status_display }}</dd><dt class="col-sm-3">Técnico</dt><dd class="col-sm-9">{{ investigation.technician }}</dd><dt class="col-sm-3">Início</dt><dd class="col-sm-9">{{ investigation.started_at|date:"d/m/Y H:i" }}</dd>{% if investigation.finished_at %}<dt class="col-sm-3">Fim</dt><dd class="col-sm-9">{{ investigation.finished_at|date:"d/m/Y H:i" }}</dd>{% endif %}</dl>
+    {% elif incident.status == "OPEN" %}
+        <p class="text-body-secondary">Ainda não iniciada.</p>
+        <form method="post" action="{% url 'investigation_start' incident.pk %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Iniciar investigação</button></form>
+    {% else %}<p class="text-body-secondary mb-0">Nenhuma investigação registrada.</p>{% endif %}
+</div></section>
+
+<section class="card"><div class="card-body">
+    <h2 class="h4">Intervenções</h2>
+    {% for intervention in interventions %}
+        <article class="border rounded p-3 mb-3"><h3 class="h6">{{ intervention.created_at|date:"d/m/Y H:i" }} · {{ intervention.technician }}</h3><strong>Ação realizada</strong><p>{{ intervention.action_taken|linebreaksbr }}</p><strong>Causa confirmada pelo técnico</strong><p>{{ intervention.confirmed_cause|linebreaksbr }}</p><strong>Resultado</strong><p class="mb-0">{{ intervention.result|linebreaksbr }}</p></article>
+    {% empty %}<p class="text-body-secondary">Nenhuma intervenção registrada.</p>{% endfor %}
+
+    {% if incident.status == "UNDER_INVESTIGATION" and investigation.status == "ACTIVE" %}
+        <hr><h3 class="h5">Registrar resolução</h3>
+        <p class="small text-body-secondary">A causa confirmada deve ser informada pelo profissional responsável.</p>
+        <form method="post" action="{% url 'intervention_create' incident.pk %}" class="fault-form">{% csrf_token %}{{ intervention_form.as_p }}<button class="btn btn-success" type="submit">Registrar e resolver ocorrência</button></form>
+    {% endif %}
+</div></section>
+{% endblock %}
+

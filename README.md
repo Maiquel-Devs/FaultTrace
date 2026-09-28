@@ -30,3 +30,29 @@ docker compose exec web python manage.py check
 docker compose exec web python manage.py test
 docker compose exec web python manage.py makemigrations --check --dry-run
 ```
+
+## Primeiro acesso administrativo
+
+Como todo usuário pertence obrigatoriamente a uma empresa, crie primeiro a
+organização pelo shell administrativo:
+
+```powershell
+docker compose exec web python manage.py shell -c "from accounts.models import Organization; Organization.objects.get_or_create(name='Empresa Exemplo')"
+```
+
+Em seguida, crie o superusuário e informe o ID dessa organização quando
+solicitado:
+
+```powershell
+docker compose exec web python manage.py createsuperuser
+```
+
+O login da aplicação fica em <http://localhost:8000/accounts/login/>. Usuários
+com papel `ADMIN` podem cadastrar equipamentos e documentos; usuários
+`ADMIN` e `TECHNICIAN` podem registrar ocorrências, investigações e
+intervenções.
+
+> Ao atualizar uma instalação da Fase 1, use um banco vazio antes de aplicar
+> estas migrations. O custom user foi introduzido agora, antes da existência de
+> dados de domínio, e passa a ser dependência das migrations administrativas do
+> Django.

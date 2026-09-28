@@ -2,3 +2,32 @@ body {
     background-color: #f8f9fa;
 }
 
+.card-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.card-link:hover {
+    border-color: #6c757d;
+}
+
+.fault-form input:not([type="checkbox"]),
+.fault-form select,
+.fault-form textarea {
+    display: block;
+    width: 100%;
+    padding: .375rem .75rem;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+}
+
+.fault-form ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.fault-form .errorlist {
+    color: #b02a37;
+    margin-bottom: .25rem;
+}
+

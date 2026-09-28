@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ equipment.code }} · FaultTrace{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div><a href="{% url 'equipment_list' %}" class="text-decoration-none">← Equipamentos</a><h1 class="h2 mt-2">{{ equipment.code }} — {{ equipment.name }}</h1></div>
+    {% if user.role == "ADMIN" or user.is_superuser %}<a class="btn btn-outline-primary" href="{% url 'equipment_update' equipment.pk %}">Editar</a>{% endif %}
+</div>
+<div class="card"><div class="card-body">
+    <dl class="row mb-0">
+        <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ equipment.get_status_display }}</dd>
+        <dt class="col-sm-3">Fabricante</dt><dd class="col-sm-9">{{ equipment.manufacturer|default:"—" }}</dd>
+        <dt class="col-sm-3">Modelo</dt><dd class="col-sm-9">{{ equipment.model|default:"—" }}</dd>
+        <dt class="col-sm-3">Localização</dt><dd class="col-sm-9">{{ equipment.location|default:"—" }}</dd>
+        <dt class="col-sm-3">Descrição</dt><dd class="col-sm-9">{{ equipment.description|default:"—"|linebreaksbr }}</dd>
+    </dl>
+</div></div>
+{% endblock %}
+

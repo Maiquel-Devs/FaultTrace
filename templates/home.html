@@ -1,11 +1,27 @@
 {% extends "base.html" %}
 
-{% block content %}
-<section class="text-center py-5">
-    <h1 class="display-5 fw-semibold">FaultTrace</h1>
-    <p class="lead text-body-secondary">
-        O sistema investiga conhecimento. O técnico diagnostica o equipamento.
-    </p>
-</section>
-{% endblock %}
+{% block title %}Início · FaultTrace{% endblock %}
 
+{% block content %}
+<section class="mb-4">
+    <h1 class="h2">Visão operacional</h1>
+    <p class="text-body-secondary">O sistema investiga conhecimento. O técnico diagnostica o equipamento.</p>
+</section>
+<div class="row g-3">
+    <div class="col-md-4">
+        <a class="card card-link h-100" href="{% url 'equipment_list' %}">
+            <div class="card-body"><span class="display-6">{{ equipment_count }}</span><p class="mb-0">Equipamentos</p></div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a class="card card-link h-100" href="{% url 'document_list' %}">
+            <div class="card-body"><span class="display-6">{{ document_count }}</span><p class="mb-0">Documentos</p></div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a class="card card-link h-100" href="{% url 'incident_list' %}">
+            <div class="card-body"><span class="display-6">{{ open_incident_count }}</span><p class="mb-0">Ocorrências ativas</p></div>
+        </a>
+    </div>
+</div>
+{% endblock %}

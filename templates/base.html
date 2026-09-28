@@ -9,10 +9,34 @@
     <link href="{% static 'css/app.css' %}" rel="stylesheet">
 </head>
 <body>
-    <main class="container py-5">
+    <nav class="navbar navbar-expand-lg bg-dark navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">FaultTrace</a>
+            {% if user.is_authenticated %}
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item"><a class="nav-link" href="{% url 'equipment_list' %}">Equipamentos</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'document_list' %}">Documentos</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'incident_list' %}">Ocorrências</a></li>
+                    </ul>
+                    <span class="navbar-text me-3">{{ user }} · {{ user.organization }}</span>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-light btn-sm" type="submit">Sair</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </nav>
+    <main class="container py-4">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}" role="alert">{{ message }}</div>
+        {% endfor %}
         {% block content %}{% endblock %}
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
