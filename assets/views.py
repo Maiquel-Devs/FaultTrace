@@ -3,8 +3,10 @@ from django.contrib import messages
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_POST
 
 from accounts.decorators import organization_admin_required
+from knowledge.retrieval import index_document
 
 from .forms import DocumentForm, EquipmentForm
 from .models import Document, Equipment
@@ -71,7 +73,14 @@ def document_detail(request, pk):
         ),
         pk=pk,
     )
-    return render(request, "assets/document_detail.html", {"document": document})
+    return render(
+        request,
+        "assets/document_detail.html",
+        {
+            "document": document,
+            "indexed_pages": document.sections.count(),
+        },
+    )
 
 
 @login_required
@@ -99,6 +108,48 @@ def document_create(request):
         document.organization = request.user.organization
         document.save()
         form.save_m2m()
-        messages.success(request, "Documento enviado.")
+        result = index_document(document)
+        if result.status == "INDEXED":
+            messages.success(
+                request,
+                f"Documento enviado e {result.pages_indexed} página(s) indexada(s).",
+            )
+        elif result.status == "NO_TEXT":
+            messages.warning(
+                request,
+                "Documento enviado, mas o PDF não possui texto extraível.",
+            )
+        elif result.status == "FAILED":
+            messages.warning(
+                request,
+                "Documento enviado, mas a extração de texto falhou.",
+            )
+        else:
+            messages.warning(
+                request,
+                "Documento enviado. Apenas PDFs textuais são indexados nesta fase.",
+            )
         return redirect("document_detail", pk=document.pk)
     return render(request, "assets/document_form.html", {"form": form})
+
+
+@organization_admin_required
+@require_POST
+def document_reindex(request, pk):
+    document = get_object_or_404(
+        Document.objects.filter(organization=request.user.organization),
+        pk=pk,
+    )
+    result = index_document(document)
+    if result.status == "INDEXED":
+        messages.success(
+            request,
+            f"{result.pages_indexed} página(s) indexada(s).",
+        )
+    elif result.status == "NO_TEXT":
+        messages.warning(request, "O PDF não possui texto extraível.")
+    elif result.status == "FAILED":
+        messages.error(request, "Não foi possível extrair texto do PDF.")
+    else:
+        messages.warning(request, "Apenas PDFs textuais são suportados.")
+    return redirect("document_detail", pk=document.pk)

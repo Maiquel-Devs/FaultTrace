@@ -276,3 +276,30 @@ class HypothesisEvidence(models.Model):
 
     def __str__(self):
         return f"{self.evidence} {self.get_relation_display()} {self.hypothesis}"
+
+
+class DocumentSection(models.Model):
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="sections",
+    )
+    page_number = models.PositiveIntegerField()
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["document_id", "page_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "page_number"],
+                name="unique_document_page_section",
+            )
+        ]
+
+    @property
+    def reference(self):
+        return f"{self.document.title} — página {self.page_number}"
+
+    def __str__(self):
+        return self.reference

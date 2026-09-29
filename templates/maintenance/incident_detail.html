@@ -24,6 +24,10 @@
 </div></section>
 
 {% if investigation %}
+<div class="d-flex justify-content-end mb-4"><a class="btn btn-primary" href="{% url 'related_knowledge' incident.pk %}">Consultar conhecimento relacionado</a></div>
+{% endif %}
+
+{% if investigation %}
 <section class="mb-4">
     <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h4 mb-0">Fatos</h2><a class="btn btn-outline-primary btn-sm" href="{% url 'fact_create' incident.pk %}">+ Adicionar fato</a></div>
     <div class="card"><div class="card-body">

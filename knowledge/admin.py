@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Evidence, Fact, Hypothesis, HypothesisEvidence
+from .models import DocumentSection, Evidence, Fact, Hypothesis, HypothesisEvidence
 
 
 @admin.register(Fact)
@@ -31,3 +31,10 @@ class HypothesisAdmin(admin.ModelAdmin):
 class HypothesisEvidenceAdmin(admin.ModelAdmin):
     list_display = ("hypothesis", "evidence", "relation", "created_at")
     list_filter = ("relation", "hypothesis__investigation__incident__organization")
+
+
+@admin.register(DocumentSection)
+class DocumentSectionAdmin(admin.ModelAdmin):
+    list_display = ("document", "page_number", "created_at")
+    list_filter = ("document__organization",)
+    search_fields = ("document__title", "content")

@@ -14,6 +14,12 @@ from .forms import (
     HypothesisStatusForm,
 )
 from .models import Hypothesis
+from .retrieval import (
+    get_equipment_context,
+    search_documentation,
+    search_equipment_history,
+    search_similar_incidents,
+)
 from .services import (
     DomainError,
     register_evidence,
@@ -179,3 +185,37 @@ def hypothesis_evidence_create(request, pk):
     else:
         messages.error(request, "Selecione uma evidência válida desta investigação.")
     return redirect("hypothesis_manage", pk=pk)
+
+
+@login_required
+def related_knowledge(request, incident_pk):
+    investigation = _investigation_for_incident(request.user, incident_pk)
+    incident = investigation.incident
+    query = request.GET.get("q", "").strip()
+    context = {
+        "incident": incident,
+        "equipment_context": get_equipment_context(
+            organization=request.user.organization,
+            equipment_id=incident.equipment_id,
+        ),
+        "history": search_equipment_history(
+            organization=request.user.organization,
+            equipment_id=incident.equipment_id,
+            exclude_incident_id=incident.pk,
+        ),
+        "query": query,
+        "similar_incidents": (),
+        "documentation_results": (),
+    }
+    if query:
+        context["similar_incidents"] = search_similar_incidents(
+            organization=request.user.organization,
+            query=query,
+            current_incident_id=incident.pk,
+        )
+        context["documentation_results"] = search_documentation(
+            organization=request.user.organization,
+            equipment_id=incident.equipment_id,
+            query=query,
+        )
+    return render(request, "knowledge/related_knowledge.html", context)

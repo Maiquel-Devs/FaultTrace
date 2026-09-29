@@ -4,6 +4,11 @@ from . import views
 
 
 urlpatterns = [
+    path(
+        "<int:incident_pk>/knowledge/",
+        views.related_knowledge,
+        name="related_knowledge",
+    ),
     path("<int:incident_pk>/facts/new/", views.fact_create, name="fact_create"),
     path(
         "<int:incident_pk>/evidence/new/",
