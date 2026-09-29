@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar hipótese · FaultTrace{% endblock %}
+
+{% block content %}
+<a href="{% url 'incident_detail' hypothesis.investigation.incident_id %}" class="text-decoration-none">← Ocorrência #{{ hypothesis.investigation.incident_id }}</a>
+<div class="d-flex justify-content-between align-items-start mt-3 mb-4">
+    <div><h1 class="h3">{{ hypothesis.description }}</h1><p class="text-body-secondary mb-0">Criada por {{ hypothesis.created_by }}</p></div>
+    <span class="badge text-bg-secondary fs-6">{{ hypothesis.get_status_display }}</span>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <section class="card h-100"><div class="card-body">
+            <h2 class="h5 text-success">Sustentam</h2>
+            {% for link in supports %}
+                <article class="border-bottom py-2"><p class="mb-1">{{ link.evidence.content }}</p><small class="text-body-secondary">Fonte: {{ link.evidence.source_label }}</small></article>
+            {% empty %}<p class="text-body-secondary">Nenhuma evidência associada.</p>{% endfor %}
+        </div></section>
+    </div>
+    <div class="col-lg-6">
+        <section class="card h-100"><div class="card-body">
+            <h2 class="h5 text-danger">Contradizem</h2>
+            {% for link in contradicts %}
+                <article class="border-bottom py-2"><p class="mb-1">{{ link.evidence.content }}</p><small class="text-body-secondary">Fonte: {{ link.evidence.source_label }}</small></article>
+            {% empty %}<p class="text-body-secondary">Nenhuma evidência associada.</p>{% endfor %}
+        </div></section>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-lg-6"><section class="card"><div class="card-body">
+        <h2 class="h5">Associar evidência existente</h2>
+        <form method="post" action="{% url 'hypothesis_evidence_create' hypothesis.pk %}" class="fault-form">
+            {% csrf_token %}{{ relation_form.as_p }}
+            <button class="btn btn-primary" type="submit">Associar</button>
+        </form>
+    </div></section></div>
+    <div class="col-lg-6"><section class="card"><div class="card-body">
+        <h2 class="h5">Alterar status manualmente</h2>
+        <p class="small text-body-secondary">A confirmação é sempre uma decisão humana.</p>
+        <form method="post" action="{% url 'hypothesis_status_update' hypothesis.pk %}" class="fault-form">
+            {% csrf_token %}{{ status_form.as_p }}
+            <button class="btn btn-outline-primary" type="submit">Atualizar status</button>
+        </form>
+    </div></section></div>
+</div>
+{% endblock %}

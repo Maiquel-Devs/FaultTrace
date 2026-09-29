@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · FaultTrace{% endblock %}
+
+{% block content %}
+<a href="{% url 'incident_detail' incident.pk %}" class="text-decoration-none">← Ocorrência #{{ incident.pk }}</a>
+<div class="card mt-3">
+    <div class="card-body">
+        <h1 class="h3">{{ title }}</h1>
+        <p class="text-body-secondary">Toda evidência precisa indicar uma fonte rastreável.</p>
+        <form method="post" class="fault-form" id="evidence-form">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <p>{{ form.content.label_tag }}{{ form.content }}{{ form.content.errors }}</p>
+            <p>{{ form.source_type.label_tag }}{{ form.source_type }}{{ form.source_type.errors }}</p>
+            <div data-source-field="DOCUMENT"><p>{{ form.source_document.label_tag }}{{ form.source_document }}{{ form.source_document.errors }}</p></div>
+            <div data-source-field="PAST_INCIDENT"><p>{{ form.source_incident.label_tag }}{{ form.source_incident }}{{ form.source_incident.errors }}</p></div>
+            <div data-source-field="TECHNICIAN"><p>{{ form.source_technician.label_tag }}{{ form.source_technician }}{{ form.source_technician.errors }}</p></div>
+            <p>{{ form.source_reference.label_tag }}{{ form.source_reference }}<span class="form-text">{{ form.source_reference.help_text }}</span>{{ form.source_reference.errors }}</p>
+            <button class="btn btn-primary" type="submit">Salvar evidência</button>
+        </form>
+    </div>
+</div>
+<script>
+(() => {
+    const sourceType = document.getElementById("id_source_type");
+    const updateSourceFields = () => {
+        document.querySelectorAll("[data-source-field]").forEach((field) => {
+            field.hidden = field.dataset.sourceField !== sourceType.value;
+        });
+    };
+    sourceType.addEventListener("change", updateSourceFields);
+    updateSourceFields();
+})();
+</script>
+{% endblock %}
