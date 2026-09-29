@@ -21,6 +21,7 @@
                         <li class="nav-item"><a class="nav-link" href="{% url 'equipment_list' %}">Equipamentos</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'document_list' %}">Documentos</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'incident_list' %}">Ocorrências</a></li>
+                        {% if user.is_superuser or user.role == "ADMIN" %}<li class="nav-item"><a class="nav-link" href="{% url 'ai_configuration' %}">Configurações</a></li>{% endif %}
                     </ul>
                     <span class="navbar-text me-3">{{ user }} · {{ user.organization }}</span>
                     <form method="post" action="{% url 'logout' %}">

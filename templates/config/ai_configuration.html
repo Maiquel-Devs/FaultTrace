@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Configuração de IA · FaultTrace{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card"><div class="card-body">
+            <h1 class="h3">Configuração de IA</h1>
+            <p class="text-body-secondary">Um único provider ativo para {{ user.organization }}. Não existe fallback automático.</p>
+            {% if configuration %}
+                <div class="alert alert-secondary">
+                    <strong>Credencial armazenada:</strong> {{ configuration.masked_api_key }}
+                    <span class="d-block small">A chave original nunca é enviada novamente ao navegador.</span>
+                </div>
+            {% endif %}
+            <form method="post" class="fault-form">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" type="submit" name="action" value="save">Salvar</button>
+                    <button class="btn btn-outline-primary" type="submit" name="action" value="test">Salvar e testar conexão</button>
+                </div>
+            </form>
+        </div></div>
+    </div>
+</div>
+{% endblock %}
