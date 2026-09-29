@@ -78,6 +78,13 @@ class AIConfigurationTests(TestCase):
         self.assertNotContains(response, secret)
         self.assertNotContains(response, configuration.api_key_encrypted)
 
+    def test_short_api_key_is_fully_masked(self):
+        configuration = self._create_configuration(api_key="tiny")
+
+        self.assertEqual(configuration.api_key_last_four, "•" * 4)
+        self.assertEqual(configuration.masked_api_key, "•" * 16)
+        self.assertNotIn("tiny", configuration.masked_api_key)
+
     def test_technician_cannot_access_ai_configuration(self):
         self.client.force_login(self.technician)
         response = self.client.get(reverse("ai_configuration"))

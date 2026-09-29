@@ -30,7 +30,7 @@ class AIConfiguration(models.Model):
 
     def set_api_key(self, api_key):
         self.api_key_encrypted = encrypt_credential(api_key)
-        self.api_key_last_four = api_key[-4:]
+        self.api_key_last_four = api_key[-4:] if len(api_key) > 4 else "•" * 4
 
     def get_api_key(self):
         return decrypt_credential(self.api_key_encrypted)
