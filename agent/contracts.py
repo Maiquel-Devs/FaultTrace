@@ -1,12 +1,31 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
+
+
+@dataclass(frozen=True)
+class ToolDefinition:
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict[str, Any]
+    id: str | None = None
+    index: int | None = None
+    protocol_data: Any = None
 
 
 @dataclass(frozen=True)
 class LLMMessage:
-    role: Literal["system", "user", "assistant"]
-    content: str
+    role: Literal["system", "user", "assistant", "tool"]
+    content: str = ""
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_call_id: str | None = None
+    tool_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -14,6 +33,7 @@ class LLMResponse:
     content: str
     provider: str
     model: str
+    tool_calls: tuple[ToolCall, ...] = ()
 
 
 class LLMProvider(ABC):
@@ -23,7 +43,7 @@ class LLMProvider(ABC):
         self.timeout = timeout
 
     @abstractmethod
-    def generate(self, messages, *, max_tokens=None):
+    def generate(self, messages, *, tools=(), max_tokens=None):
         raise NotImplementedError
 
     def test_connection(self):

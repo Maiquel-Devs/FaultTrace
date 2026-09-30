@@ -3,6 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_http_methods
 
+from accounts.models import User
+from agent.core import InvestigationAgent
+from agent.errors import AgentError, LLMConfigurationError, LLMProviderError
+from agent.forms import AgentQuestionForm
+from agent.models import AgentInteraction
+from config.models import AIConfiguration
+
 from .forms import IncidentForm, InterventionForm
 from .models import Incident
 from .services import DomainError, create_incident, record_resolution, start_investigation
@@ -42,6 +49,30 @@ def _knowledge_context(investigation):
     }
 
 
+def _incident_detail_context(
+    incident, investigation, *, user, intervention_form=None
+):
+    ai_available = AIConfiguration.objects.filter(
+        organization=incident.organization,
+        is_active=True,
+    ).exists()
+    return {
+        "incident": incident,
+        "investigation": investigation,
+        "interventions": incident.interventions.select_related("technician"),
+        "intervention_form": intervention_form or InterventionForm(),
+        "agent_form": AgentQuestionForm(),
+        "agent_available": ai_available,
+        "latest_agent_interaction": (
+            AgentInteraction.objects.filter(investigation=investigation).first()
+            if investigation
+            else None
+        ),
+        "is_admin": user.role == User.Role.ADMIN,
+        **_knowledge_context(investigation),
+    }
+
+
 @login_required
 def incident_list(request):
     return render(
@@ -71,13 +102,7 @@ def incident_create(request):
 def incident_detail(request, pk):
     incident = get_object_or_404(_organization_incidents(request.user), pk=pk)
     investigation = getattr(incident, "investigation", None)
-    context = {
-        "incident": incident,
-        "investigation": investigation,
-        "interventions": incident.interventions.select_related("technician"),
-        "intervention_form": InterventionForm(),
-        **_knowledge_context(investigation),
-    }
+    context = _incident_detail_context(incident, investigation, user=request.user)
     return render(request, "maintenance/incident_detail.html", context)
 
 
@@ -116,12 +141,51 @@ def intervention_create(request, pk):
     return render(
         request,
         "maintenance/incident_detail.html",
-        {
-            "incident": incident,
-            "investigation": investigation,
-            "interventions": incident.interventions.select_related("technician"),
-            "intervention_form": form,
-            **_knowledge_context(investigation),
-        },
+        _incident_detail_context(
+            incident,
+            investigation,
+            user=request.user,
+            intervention_form=form,
+        ),
         status=400,
     )
+
+
+@login_required
+@require_POST
+def agent_investigate(request, pk):
+    incident = get_object_or_404(_organization_incidents(request.user), pk=pk)
+    investigation = getattr(incident, "investigation", None)
+    if investigation is None:
+        messages.error(request, "A ocorrência ainda não possui uma investigação.")
+        return redirect("incident_detail", pk=incident.pk)
+
+    form = AgentQuestionForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Informe uma pergunta válida para o assistente.")
+        return redirect("incident_detail", pk=incident.pk)
+
+    try:
+        result = InvestigationAgent().run(
+            investigation=investigation,
+            user=request.user,
+            question=form.cleaned_data["question"],
+        )
+    except LLMConfigurationError:
+        messages.error(
+            request,
+            "Nenhum provider de IA está configurado para esta organização.",
+        )
+    except LLMProviderError:
+        messages.error(
+            request,
+            "Não foi possível concluir a investigação com o provider configurado.",
+        )
+    except AgentError:
+        messages.error(request, "O assistente não conseguiu concluir esta investigação.")
+    else:
+        if result.status == "TOOL_LIMIT_REACHED":
+            messages.warning(request, result.content)
+        else:
+            messages.success(request, "Investigação assistida concluída.")
+    return redirect("incident_detail", pk=incident.pk)

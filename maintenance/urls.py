@@ -17,5 +17,9 @@ urlpatterns = [
         views.intervention_create,
         name="intervention_create",
     ),
+    path(
+        "<int:pk>/agent/investigate/",
+        views.agent_investigate,
+        name="agent_investigate",
+    ),
 ]
-

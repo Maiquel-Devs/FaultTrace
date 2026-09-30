@@ -175,7 +175,15 @@ class AIConfigurationTests(TestCase):
 
         with patch("agent.providers.genai.Client") as sdk:
             client = sdk.return_value
-            client.models.generate_content.return_value = SimpleNamespace(text="gemini ok")
+            client.models.generate_content.return_value = SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="gemini ok", function_call=None)]
+                        )
+                    )
+                ]
+            )
             response = GeminiProvider(api_key="key", model="model").generate(message)
             self.assertEqual(response.content, "gemini ok")
             client.close.assert_called_once()

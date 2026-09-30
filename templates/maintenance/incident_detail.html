@@ -28,6 +28,36 @@
 {% endif %}
 
 {% if investigation %}
+<section class="card mb-4" id="investigation-assistant"><div class="card-body">
+    <h2 class="h4">Assistente de investigação</h2>
+    <p class="text-body-secondary">O assistente pesquisa conhecimento do FaultTrace e organiza indícios. A conclusão continua sendo responsabilidade do técnico.</p>
+    {% if agent_available %}
+        <form method="post" action="{% url 'agent_investigate' incident.pk %}" class="fault-form mb-4">
+            {% csrf_token %}
+            {{ agent_form.as_p }}
+            <button class="btn btn-primary" type="submit">Investigar</button>
+        </form>
+    {% else %}
+        <div class="alert alert-secondary mb-4">
+            Nenhum provider de IA está configurado para esta organização.
+            {% if is_admin %}<a href="{% url 'ai_configuration' %}" class="alert-link">Abrir Configurações</a>.{% endif %}
+        </div>
+    {% endif %}
+
+    {% if latest_agent_interaction %}
+        <hr>
+        <h3 class="h5">Resposta</h3>
+        <div class="mb-3">{{ latest_agent_interaction.response|linebreaks }}</div>
+        {% if latest_agent_interaction.sources %}
+            <h4 class="h6">Fontes consultadas</h4>
+            <ul class="mb-3">
+                {% for source in latest_agent_interaction.sources %}<li>{{ source }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+        <small class="text-body-secondary">{{ latest_agent_interaction.provider }} · {{ latest_agent_interaction.model }} · {{ latest_agent_interaction.created_at|date:"d/m/Y H:i" }}</small>
+    {% endif %}
+</div></section>
+
 <section class="mb-4">
     <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h4 mb-0">Fatos</h2><a class="btn btn-outline-primary btn-sm" href="{% url 'fact_create' incident.pk %}">+ Adicionar fato</a></div>
     <div class="card"><div class="card-body">
