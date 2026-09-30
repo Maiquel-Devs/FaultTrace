@@ -11,10 +11,12 @@ from maintenance.models import Incident, Investigation
 
 from .contracts import LLMMessage, LLMResponse, ToolCall
 from .core import MAX_TOOL_ROUNDS, InvestigationAgent
+from .errors import LLMProviderError
 from .models import AgentInteraction
 from .providers import (
     AnthropicProvider,
     GeminiProvider,
+    GroqProvider,
     MistralProvider,
     OpenAIProvider,
 )
@@ -410,3 +412,166 @@ class ProviderToolCallingTests(TestCase):
             )
             self.assertEqual(result.tool_calls[0].id, "anthropic-native")
             self.assertIn("tools", client.messages.create.call_args.kwargs)
+
+
+class GroqProviderTests(TestCase):
+    def setUp(self):
+        self.messages = [LLMMessage(role="user", content="Investigue.")]
+        self.tools = ToolRegistry().definitions[:1]
+
+    def test_tool_definition_and_structured_call_are_normalized(self):
+        native_call = SimpleNamespace(
+            id="groq-native",
+            index=3,
+            function=SimpleNamespace(
+                name="get_equipment_context",
+                arguments='{"equipment_id": 7}',
+            ),
+        )
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=None, tool_calls=[native_call])
+                    )
+                ]
+            )
+
+            response = GroqProvider(api_key="key", model="model").generate(
+                self.messages,
+                tools=self.tools,
+            )
+
+        request = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(request["tools"][0]["type"], "function")
+        self.assertEqual(
+            request["tools"][0]["function"]["name"],
+            "get_equipment_context",
+        )
+        self.assertEqual(response.tool_calls[0].id, "groq-native")
+        self.assertEqual(response.tool_calls[0].index, 3)
+        self.assertEqual(response.tool_calls[0].arguments, {"equipment_id": 7})
+
+    def test_tool_call_and_result_are_sent_back_with_native_id(self):
+        messages = [
+            *self.messages,
+            LLMMessage(
+                role="assistant",
+                tool_calls=(
+                    ToolCall(
+                        id="groq-native",
+                        name="get_equipment_context",
+                        arguments={"equipment_id": 7},
+                    ),
+                ),
+            ),
+            LLMMessage(
+                role="tool",
+                content='{"ok": true}',
+                tool_call_id="groq-native",
+                tool_name="get_equipment_context",
+            ),
+        ]
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="Contexto analisado.",
+                            tool_calls=None,
+                        )
+                    )
+                ]
+            )
+
+            response = GroqProvider(api_key="key", model="model").generate(
+                messages,
+                tools=self.tools,
+            )
+
+        request_messages = client.chat.completions.create.call_args.kwargs["messages"]
+        self.assertEqual(
+            request_messages[1]["tool_calls"][0]["id"],
+            "groq-native",
+        )
+        self.assertEqual(request_messages[2]["role"], "tool")
+        self.assertEqual(request_messages[2]["tool_call_id"], "groq-native")
+        self.assertEqual(response.content, "Contexto analisado.")
+
+    def test_text_response_and_json_text_remain_plain_content(self):
+        json_text = '{"name":"search_documentation","arguments":{}}'
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=json_text,
+                            tool_calls=None,
+                        )
+                    )
+                ]
+            )
+
+            response = GroqProvider(api_key="key", model="model").generate(
+                self.messages,
+            )
+
+        self.assertEqual(response.content, json_text)
+        self.assertEqual(response.tool_calls, ())
+
+    def test_connection_is_minimal_and_does_not_send_tools(self):
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="OK", tool_calls=None)
+                    )
+                ]
+            )
+
+            GroqProvider(api_key="key", model="model").test_connection()
+
+        request = client.chat.completions.create.call_args.kwargs
+        self.assertEqual(request["max_completion_tokens"], 1024)
+        self.assertEqual(
+            request["messages"],
+            [{"role": "user", "content": "Responda apenas: OK"}],
+        )
+        self.assertNotIn("tools", request)
+        sdk.assert_called_once_with(
+            api_key="key",
+            timeout=20.0,
+            max_retries=0,
+        )
+
+    def test_connection_still_rejects_a_truly_empty_response(self):
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="", tool_calls=None)
+                    )
+                ]
+            )
+
+            with self.assertRaisesRegex(LLMProviderError, "resposta vazia"):
+                GroqProvider(api_key="key", model="model").test_connection()
+
+    def test_sdk_error_is_controlled_and_does_not_expose_api_key(self):
+        secret = "groq-secret-key"
+        provider = GroqProvider(api_key=secret, model="model")
+        with patch(
+            "agent.providers.Groq",
+            side_effect=RuntimeError(f"authorization failed: {secret}"),
+        ):
+            with self.assertRaises(LLMProviderError) as captured:
+                provider.generate(self.messages)
+
+        self.assertNotIn(secret, str(captured.exception))
+        self.assertNotIn(secret, repr(captured.exception))
+        self.assertIsNone(captured.exception.__cause__)

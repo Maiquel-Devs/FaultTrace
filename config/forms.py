@@ -8,6 +8,7 @@ DEFAULT_MODELS = {
     AIConfiguration.Provider.OPENAI: "gpt-5-mini",
     AIConfiguration.Provider.GEMINI: "gemini-3.8-flash",
     AIConfiguration.Provider.ANTHROPIC: "claude-sonnet-5",
+    AIConfiguration.Provider.GROQ: "openai/gpt-oss-120b",
 }
 
 

@@ -20,6 +20,14 @@ históricos e documentação técnica para auxiliar equipes de manutenção.
    docker compose up --build
    ```
 
+   O código da aplicação é copiado para a imagem e não é montado no container.
+   Portanto, depois de alterar Python, templates ou arquivos estáticos, reconstrua
+   o serviço antes de validar a mudança no navegador:
+
+   ```powershell
+   docker compose up --build -d web
+   ```
+
 A aplicação estará disponível em <http://localhost:8000/> e o health check em
 <http://localhost:8000/health/>.
 
@@ -33,6 +41,10 @@ docker compose exec web python manage.py makemigrations --check --dry-run
 docker compose exec web python manage.py migrate --check
 docker compose exec web python manage.py test
 ```
+
+Funcionalidades dependentes de APIs do navegador, como persistência em
+`localStorage`, também exigem validação manual em um navegador real após o
+rebuild da imagem.
 
 ## Integração contínua
 

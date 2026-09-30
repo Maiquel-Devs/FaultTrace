@@ -5,6 +5,7 @@ from .errors import LLMConfigurationError
 from .providers import (
     AnthropicProvider,
     GeminiProvider,
+    GroqProvider,
     MistralProvider,
     OpenAIProvider,
 )
@@ -15,6 +16,7 @@ PROVIDERS = {
     AIConfiguration.Provider.OPENAI: OpenAIProvider,
     AIConfiguration.Provider.GEMINI: GeminiProvider,
     AIConfiguration.Provider.ANTHROPIC: AnthropicProvider,
+    AIConfiguration.Provider.GROQ: GroqProvider,
 }
 
 

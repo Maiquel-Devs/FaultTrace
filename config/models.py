@@ -11,6 +11,7 @@ class AIConfiguration(models.Model):
         OPENAI = "OPENAI", "OpenAI"
         GEMINI = "GEMINI", "Google Gemini"
         ANTHROPIC = "ANTHROPIC", "Anthropic Claude"
+        GROQ = "GROQ", "Groq"
 
     organization = models.OneToOneField(
         Organization,

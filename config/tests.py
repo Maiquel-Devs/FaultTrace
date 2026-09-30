@@ -13,6 +13,7 @@ from agent.factory import get_active_provider
 from agent.providers import (
     AnthropicProvider,
     GeminiProvider,
+    GroqProvider,
     MistralProvider,
     OpenAIProvider,
 )
@@ -111,6 +112,7 @@ class AIConfigurationTests(TestCase):
             (AIConfiguration.Provider.OPENAI, OpenAIProvider),
             (AIConfiguration.Provider.GEMINI, GeminiProvider),
             (AIConfiguration.Provider.ANTHROPIC, AnthropicProvider),
+            (AIConfiguration.Provider.GROQ, GroqProvider),
         )
         for provider_name, expected_class in cases:
             with self.subTest(provider=provider_name):
@@ -121,6 +123,23 @@ class AIConfigurationTests(TestCase):
                 )
                 provider = get_active_provider(self.organization)
                 self.assertIsInstance(provider, expected_class)
+
+    def test_groq_configuration_is_scoped_and_secret_is_not_rendered(self):
+        secret = "groq-super-secret-9X7Z"
+        configuration = self._create_configuration(
+            provider=AIConfiguration.Provider.GROQ,
+            model="openai/gpt-oss-120b",
+            api_key=secret,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("ai_configuration"))
+
+        self.assertContains(response, "Groq")
+        self.assertContains(response, "openai/gpt-oss-120b")
+        self.assertContains(response, configuration.masked_api_key)
+        self.assertNotContains(response, secret)
+        self.assertNotIn(secret, configuration.api_key_encrypted)
 
     def test_factory_reports_missing_and_invalid_configuration(self):
         with self.assertRaisesRegex(LLMConfigurationError, "não possui"):
@@ -172,6 +191,18 @@ class AIConfigurationTests(TestCase):
             client.responses.create.return_value = SimpleNamespace(output_text="openai ok")
             response = OpenAIProvider(api_key="key", model="model").generate(message)
             self.assertEqual(response.content, "openai ok")
+
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="groq ok", tool_calls=None)
+                    )
+                ]
+            )
+            response = GroqProvider(api_key="key", model="model").generate(message)
+            self.assertEqual(response.content, "groq ok")
 
         with patch("agent.providers.genai.Client") as sdk:
             client = sdk.return_value

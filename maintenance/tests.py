@@ -134,6 +134,13 @@ class ResolutionDraftViewTests(TestCase):
     def test_active_investigation_enables_local_resolution_draft(self):
         response = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
 
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            list(response.context["intervention_form"].fields),
+            ["action_taken", "confirmed_cause", "result"],
+        )
+        for field_name in ("action_taken", "confirmed_cause", "result"):
+            self.assertContains(response, f'name="{field_name}"')
         self.assertContains(response, self.draft_key(self.incident))
         self.assertContains(response, "localStorage.getItem(draftKey)")
         self.assertContains(response, "localStorage.setItem(draftKey, JSON.stringify(draft))")
@@ -190,6 +197,24 @@ class ResolutionDraftViewTests(TestCase):
         self.assertContains(response, other_key)
         self.assertNotContains(response, self.draft_key(self.incident))
 
+    def test_draft_key_is_isolated_by_user(self):
+        other_technician = User.objects.create_user(
+            username="other-technician-same-organization",
+            password="test-password",
+            organization=self.organization,
+            role=User.Role.TECHNICIAN,
+        )
+        self.client.force_login(other_technician)
+
+        response = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
+        other_key = (
+            "faulttrace_resolution_draft_"
+            f"{self.organization.pk}_{self.incident.pk}_{other_technician.pk}"
+        )
+
+        self.assertContains(response, other_key)
+        self.assertNotContains(response, self.draft_key(self.incident))
+
     def test_invalid_submission_keeps_draft_enabled_and_domain_unchanged(self):
         response = self.client.post(
             reverse("intervention_create", args=[self.incident.pk]),
@@ -207,6 +232,8 @@ class ResolutionDraftViewTests(TestCase):
             "localStorage.setItem(draftKey, JSON.stringify(draft))",
             status_code=400,
         )
+        self.assertContains(response, "Partial adjustment.", status_code=400)
+        self.assertContains(response, "Test pending.", status_code=400)
         self.incident.refresh_from_db()
         self.assertEqual(self.incident.status, Incident.Status.UNDER_INVESTIGATION)
         self.assertFalse(Intervention.objects.filter(incident=self.incident).exists())

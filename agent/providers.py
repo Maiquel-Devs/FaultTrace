@@ -3,10 +3,11 @@ import json
 from anthropic import Anthropic
 from google import genai
 from google.genai import types as genai_types
+from groq import Groq
 from mistralai.client import Mistral
 from openai import OpenAI
 
-from .contracts import LLMProvider, LLMResponse, ToolCall
+from .contracts import LLMMessage, LLMProvider, LLMResponse, ToolCall
 from .errors import LLMProviderError
 
 
@@ -52,31 +53,35 @@ def _chat_tools(tools):
     ]
 
 
+def _chat_messages(messages):
+    provider_messages = []
+    for message in messages:
+        item = {"role": message.role, "content": message.content}
+        if message.role == "assistant" and message.tool_calls:
+            item["tool_calls"] = [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {
+                        "name": call.name,
+                        "arguments": json.dumps(call.arguments, ensure_ascii=False),
+                    },
+                }
+                for call in message.tool_calls
+            ]
+        if message.role == "tool":
+            item["tool_call_id"] = message.tool_call_id
+        provider_messages.append(item)
+    return provider_messages
+
+
 class MistralProvider(LLMProvider):
     provider_name = "MISTRAL"
 
     def generate(self, messages, *, tools=(), max_tokens=None):
-        provider_messages = []
-        for message in messages:
-            item = {"role": message.role, "content": message.content}
-            if message.role == "assistant" and message.tool_calls:
-                item["tool_calls"] = [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {
-                            "name": call.name,
-                            "arguments": json.dumps(call.arguments, ensure_ascii=False),
-                        },
-                    }
-                    for call in message.tool_calls
-                ]
-            if message.role == "tool":
-                item["tool_call_id"] = message.tool_call_id
-            provider_messages.append(item)
         request = {
             "model": self.model,
-            "messages": provider_messages,
+            "messages": _chat_messages(messages),
             "timeout_ms": int(self.timeout * 1000),
         }
         if tools:
@@ -106,6 +111,54 @@ class MistralProvider(LLMProvider):
             raise
         except Exception:
             raise _provider_error("Mistral") from None
+        return LLMResponse(
+            content=content,
+            provider=self.provider_name,
+            model=self.model,
+            tool_calls=tool_calls,
+        )
+
+
+class GroqProvider(LLMProvider):
+    provider_name = "GROQ"
+
+    def test_connection(self):
+        self.generate(
+            [LLMMessage(role="user", content="Responda apenas: OK")],
+            max_tokens=1024,
+        )
+
+    def generate(self, messages, *, tools=(), max_tokens=None):
+        request = {
+            "model": self.model,
+            "messages": _chat_messages(messages),
+        }
+        if tools:
+            request["tools"] = _chat_tools(tools)
+        if max_tokens is not None:
+            request["max_completion_tokens"] = max_tokens
+        try:
+            with Groq(
+                api_key=self._api_key,
+                timeout=self.timeout,
+                max_retries=0,
+            ) as client:
+                response = client.chat.completions.create(**request)
+            response_message = response.choices[0].message
+            tool_calls = tuple(
+                ToolCall(
+                    id=getattr(call, "id", None),
+                    name=call.function.name,
+                    arguments=_arguments(call.function.arguments, "Groq"),
+                    index=getattr(call, "index", None),
+                )
+                for call in (getattr(response_message, "tool_calls", None) or ())
+            )
+            content = _require_response(response_message.content, tool_calls, "Groq")
+        except LLMProviderError:
+            raise
+        except Exception:
+            raise _provider_error("Groq") from None
         return LLMResponse(
             content=content,
             provider=self.provider_name,
