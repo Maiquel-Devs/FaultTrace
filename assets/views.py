@@ -12,6 +12,15 @@ from .forms import DocumentForm, EquipmentForm
 from .models import Document, Equipment
 
 
+def _document_file_available(document):
+    if not document.file.name:
+        return False
+    try:
+        return document.file.storage.exists(document.file.name)
+    except OSError:
+        return False
+
+
 @login_required
 def equipment_list(request):
     equipments = Equipment.objects.filter(organization=request.user.organization)
@@ -79,6 +88,7 @@ def document_detail(request, pk):
         {
             "document": document,
             "indexed_pages": document.sections.count(),
+            "file_available": _document_file_available(document),
         },
     )
 
@@ -88,8 +98,22 @@ def document_download(request, pk):
     document = get_object_or_404(
         Document.objects.filter(organization=request.user.organization), pk=pk
     )
+    if not _document_file_available(document):
+        messages.warning(
+            request,
+            "O arquivo físico deste documento está indisponível. O conteúdo já indexado continua pesquisável.",
+        )
+        return redirect("document_detail", pk=document.pk)
+    try:
+        stream = document.file.open("rb")
+    except OSError:
+        messages.warning(
+            request,
+            "O arquivo físico deste documento está indisponível. O conteúdo já indexado continua pesquisável.",
+        )
+        return redirect("document_detail", pk=document.pk)
     return FileResponse(
-        document.file.open("rb"),
+        stream,
         as_attachment=False,
         filename=document.file.name.rsplit("/", 1)[-1],
     )
@@ -140,6 +164,12 @@ def document_reindex(request, pk):
         Document.objects.filter(organization=request.user.organization),
         pk=pk,
     )
+    if not _document_file_available(document):
+        messages.warning(
+            request,
+            "Não é possível reindexar: o arquivo físico está indisponível. O conteúdo já indexado foi preservado.",
+        )
+        return redirect("document_detail", pk=document.pk)
     result = index_document(document)
     if result.status == "INDEXED":
         messages.success(

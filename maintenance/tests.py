@@ -1,8 +1,14 @@
+from io import StringIO
+from tempfile import TemporaryDirectory
+
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 
 from accounts.models import Organization, User
 from assets.models import Equipment
+from assets.models import Document
+from knowledge.models import Evidence, Fact, Hypothesis, HypothesisEvidence
 
 from .models import Incident, Intervention, Investigation
 from .services import DomainError, record_resolution, start_investigation
@@ -87,3 +93,46 @@ class MaintenanceServiceTests(TestCase):
         self.assertEqual(intervention.confirmed_cause, "Vedação rompida.")
         self.assertEqual(Intervention.objects.filter(incident=self.incident).count(), 1)
 
+
+class DemoScenarioTests(TestCase):
+    def test_seed_demo_is_complete_and_idempotent(self):
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            output = StringIO()
+            call_command("seed_demo", password="local-test-password", stdout=output)
+            call_command("seed_demo", password="local-test-password", stdout=output)
+
+            organization = Organization.objects.get(name="FaultTrace Demo")
+            equipment = Equipment.objects.get(organization=organization, code="C-04")
+            current = Incident.objects.get(
+                organization=organization,
+                description__startswith="Equipamento desliga após aproximadamente",
+            )
+            investigation = Investigation.objects.get(incident=current)
+            document = Document.objects.get(
+                organization=organization,
+                title="Manual AX-200",
+            )
+
+            self.assertTrue(document.file.storage.exists(document.file.name))
+            self.assertTrue(
+                document.sections.filter(page_number=34, content__icontains="E07").exists()
+            )
+            self.assertEqual(
+                Incident.objects.filter(organization=organization).count(), 2
+            )
+            self.assertEqual(Investigation.objects.filter(incident=current).count(), 1)
+            self.assertEqual(Fact.objects.filter(investigation=investigation).count(), 1)
+            self.assertEqual(
+                Evidence.objects.filter(investigation=investigation).count(), 2
+            )
+            self.assertEqual(
+                Hypothesis.objects.filter(investigation=investigation).count(), 1
+            )
+            self.assertEqual(
+                HypothesisEvidence.objects.filter(
+                    hypothesis__investigation=investigation
+                ).count(),
+                2,
+            )
+            self.assertEqual(current.interventions.count(), 0)
+            self.assertIn("Cenário demo preparado com sucesso", output.getvalue())

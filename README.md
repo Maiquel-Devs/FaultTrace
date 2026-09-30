@@ -56,3 +56,21 @@ intervenções.
 > estas migrations. O custom user foi introduzido agora, antes da existência de
 > dados de domínio, e passa a ser dependência das migrations administrativas do
 > Django.
+
+## Cenário de demonstração
+
+Com os serviços em execução, prepare o cenário determinístico do Compressor C-04:
+
+```powershell
+docker compose exec web python manage.py seed_demo --password "escolha-uma-senha-local"
+```
+
+O comando pode ser executado novamente sem duplicar os registros principais. Ele
+cria a organização `FaultTrace Demo`, o usuário `demo_admin`, equipamento,
+ocorrência atual, histórico, fatos, evidências, hipótese e o PDF fictício
+`Manual AX-200`. A senha é recebida somente pela linha de comando e não fica
+armazenada no repositório.
+
+Entre com `demo_admin` e a senha informada. Para executar o Assistente de
+investigação, configure um provider de IA pela tela de Configurações usando sua
+própria credencial.

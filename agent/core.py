@@ -7,6 +7,7 @@ from .contracts import LLMMessage
 from .errors import AgentAuthorizationError
 from .factory import get_active_provider
 from .models import AgentInteraction
+from .presentation import without_generated_sources
 from .tools import ToolContext, ToolRegistry
 
 
@@ -17,7 +18,8 @@ Ajude o técnico a investigar informação sobre a falha; o diagnóstico final p
 Use as Tools quando precisar de histórico, documentação ou detalhes que não estão no contexto inicial.
 Diferencie fatos atuais de histórico: casos semelhantes não provam a causa atual e documentação é evidência técnica, não confirmação automática.
 Preserve as referências das fontes recuperadas, procure sustentação e contradições, explicite incertezas e não invente informação ausente.
-Na resposta final, use as seções: Resumo da investigação; O que sabemos; Evidências relevantes; Contradições; Hipóteses relacionadas; O que ainda falta verificar; Fontes consultadas.
+Na resposta final, use as seções: Resumo da investigação; O que sabemos; Evidências relevantes; Contradições; Hipóteses relacionadas; O que ainda falta verificar.
+Não crie uma seção de fontes: a aplicação apresentará separadamente as fontes realmente consultadas pelas Tools.
 Seja conciso. Nunca confirme hipótese, causa ou diagnóstico em nome do técnico."""
 
 
@@ -101,7 +103,7 @@ class InvestigationAgent:
             )
             if not response.tool_calls:
                 result = AgentResult(
-                    content=response.content,
+                    content=without_generated_sources(response.content),
                     provider=response.provider,
                     model=response.model,
                     tools_used=tuple(trace),

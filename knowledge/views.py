@@ -44,7 +44,11 @@ def _investigation_for_incident(user, incident_pk):
 @require_http_methods(["GET", "POST"])
 def fact_create(request, incident_pk):
     investigation = _investigation_for_incident(request.user, incident_pk)
-    form = FactForm(request.POST or None)
+    form = FactForm(
+        request.POST or None,
+        investigation=investigation,
+        user=request.user,
+    )
     if request.method == "POST" and form.is_valid():
         fact = form.save(commit=False)
         fact.investigation = investigation
@@ -60,7 +64,12 @@ def fact_create(request, incident_pk):
     return render(
         request,
         "knowledge/form.html",
-        {"form": form, "title": "Adicionar fato", "incident": investigation.incident},
+        {
+            "form": form,
+            "title": "Adicionar fato",
+            "submit_label": "Salvar fato",
+            "incident": investigation.incident,
+        },
     )
 
 
@@ -108,7 +117,15 @@ def hypothesis_create(request, incident_pk):
     return render(
         request,
         "knowledge/form.html",
-        {"form": form, "title": "Criar hipótese", "incident": investigation.incident},
+        {
+            "form": form,
+            "title": "Criar hipótese",
+            "submit_label": "Salvar hipótese",
+            "form_explanation": (
+                "Uma hipótese representa uma possibilidade em investigação e não uma causa confirmada."
+            ),
+            "incident": investigation.incident,
+        },
     )
 
 

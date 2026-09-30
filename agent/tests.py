@@ -19,6 +19,7 @@ from .providers import (
     OpenAIProvider,
 )
 from .tools import ToolContext, ToolRegistry
+from .templatetags.agent_markdown import safe_markdown
 
 
 class FakeLLMProvider:
@@ -267,6 +268,56 @@ class InvestigationAgentTests(TestCase):
             "Nenhum provider de IA está configurado para esta organização.",
         )
         self.assertEqual(external.status_code, 404)
+
+    def test_markdown_is_rendered_and_model_html_is_escaped(self):
+        rendered = str(
+            safe_markdown(
+                "### Título\n\n**Importante**\n\n1. Primeiro\n2. Segundo\n\n"
+                "- Item\n\n---\n\n<script>alert('xss')</script>"
+                "\n\n[link perigoso](javascript:alert('xss'))"
+            )
+        )
+
+        self.assertIn("<h3>Título</h3>", rendered)
+        self.assertIn("<strong>Importante</strong>", rendered)
+        self.assertIn("<ol>", rendered)
+        self.assertIn("<ul>", rendered)
+        self.assertIn("<hr", rendered)
+        self.assertNotIn("<script>", rendered)
+        self.assertNotIn("<a ", rendered)
+        self.assertIn("&lt;script&gt;", rendered)
+
+    def test_structured_sources_are_the_only_sources_section_rendered(self):
+        provider = FakeLLMProvider(
+            [
+                _response(
+                    tool_calls=[
+                        ToolCall(
+                            id="history-1",
+                            name="search_equipment_history",
+                            arguments={},
+                        )
+                    ]
+                ),
+                _response(
+                    "### Resumo da investigação\n\nHistórico é apenas indício.\n\n"
+                    "### Fontes consultadas\n\n- Fonte inventada pelo texto"
+                ),
+            ]
+        )
+        InvestigationAgent().run(
+            investigation=self.investigation,
+            user=self.user,
+            question="Consulte o histórico.",
+            provider=provider,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
+
+        self.assertContains(response, "Fontes consultadas", count=1)
+        self.assertNotContains(response, "Fonte inventada pelo texto")
+        self.assertContains(response, f"Ocorrência #{self.past_incident.pk}")
 
 
 class ProviderToolCallingTests(TestCase):

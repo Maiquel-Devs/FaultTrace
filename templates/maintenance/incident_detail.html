@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load agent_markdown %}
 
 {% block title %}Ocorrência #{{ incident.pk }} · FaultTrace{% endblock %}
 
@@ -47,7 +48,7 @@
     {% if latest_agent_interaction %}
         <hr>
         <h3 class="h5">Resposta</h3>
-        <div class="mb-3">{{ latest_agent_interaction.response|linebreaks }}</div>
+        <div class="agent-response mb-3">{{ latest_agent_interaction.response|without_sources|safe_markdown }}</div>
         {% if latest_agent_interaction.sources %}
             <h4 class="h6">Fontes consultadas</h4>
             <ul class="mb-3">

@@ -7,14 +7,18 @@
 <h1 class="h2 mt-2">{{ document.title }}</h1>
 <div class="card mt-4"><div class="card-body">
     <p>{{ document.description|default:"Sem descrição."|linebreaksbr }}</p>
-    <p><a class="btn btn-outline-primary" href="{% url 'document_download' document.pk %}" target="_blank">Abrir arquivo</a></p>
+    {% if file_available %}
+        <p><a class="btn btn-outline-primary" href="{% url 'document_download' document.pk %}" target="_blank">Abrir arquivo</a></p>
+    {% else %}
+        <div class="alert alert-warning py-2">Arquivo físico indisponível. O registro e o conteúdo já indexado continuam disponíveis para consulta.</div>
+    {% endif %}
     <h2 class="h5 mt-4">Conteúdo pesquisável</h2>
     {% if indexed_pages %}
         <p>{{ indexed_pages }} página(s) com texto indexado.</p>
     {% else %}
         <p class="text-body-secondary">Nenhuma página textual indexada.</p>
     {% endif %}
-    {% if user.role == "ADMIN" %}
+    {% if user.role == "ADMIN" and file_available %}
         <form method="post" action="{% url 'document_reindex' document.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary" type="submit">Reindexar PDF</button></form>
     {% endif %}
     <h2 class="h5 mt-4">Equipamentos relacionados</h2>

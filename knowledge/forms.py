@@ -14,6 +14,14 @@ class FactForm(forms.ModelForm):
         labels = {"content": "Fato", "source_type": "Origem"}
         widgets = {"content": forms.Textarea(attrs={"rows": 3})}
 
+    def __init__(self, *args, investigation, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance.investigation = investigation
+        self.instance.created_by = user
+        choices = list(self.fields["source_type"].choices)
+        choices[0] = ("", "Selecione a origem")
+        self.fields["source_type"].choices = choices
+
 
 class EvidenceForm(forms.ModelForm):
     class Meta:
@@ -41,6 +49,9 @@ class EvidenceForm(forms.ModelForm):
 
     def __init__(self, *args, investigation, **kwargs):
         super().__init__(*args, **kwargs)
+        choices = list(self.fields["source_type"].choices)
+        choices[0] = ("", "Selecione o tipo de fonte")
+        self.fields["source_type"].choices = choices
         organization = investigation.incident.organization
         self.fields["source_document"].queryset = Document.objects.filter(
             organization=organization
@@ -52,6 +63,9 @@ class EvidenceForm(forms.ModelForm):
             organization=organization,
             role=User.Role.TECHNICIAN,
         )
+        self.fields["source_document"].empty_label = "Selecione o documento"
+        self.fields["source_incident"].empty_label = "Selecione a ocorrência anterior"
+        self.fields["source_technician"].empty_label = "Selecione o técnico"
 
 
 class HypothesisForm(forms.ModelForm):

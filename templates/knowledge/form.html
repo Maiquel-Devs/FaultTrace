@@ -8,10 +8,11 @@
     <div class="card-body">
         <h1 class="h3">{{ title }}</h1>
         <p class="text-body-secondary">{{ incident.equipment }}</p>
+        {% if form_explanation %}<p class="text-body-secondary">{{ form_explanation }}</p>{% endif %}
         <form method="post" class="fault-form">
             {% csrf_token %}
             {{ form.as_p }}
-            <button class="btn btn-primary" type="submit">Salvar</button>
+            <button class="btn btn-primary" type="submit">{{ submit_label|default:"Salvar" }}</button>
         </form>
     </div>
 </div>

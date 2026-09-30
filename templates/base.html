@@ -34,7 +34,7 @@
     </nav>
     <main class="container py-4">
         {% for message in messages %}
-            <div class="alert alert-{{ message.tags|default:'info' }}" role="alert">{{ message }}</div>
+            <div class="alert alert-{{ message.tags|default:'info' }} py-2 mb-3" role="alert">{{ message }}</div>
         {% endfor %}
         {% block content %}{% endblock %}
     </main>

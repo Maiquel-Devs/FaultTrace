@@ -298,6 +298,56 @@ class KnowledgeLayerTests(TestCase):
         self.assertContains(response, "Verificação no equipamento atual")
         self.assertContains(response, "Enfraquecida")
 
+    def test_creation_forms_have_explicit_choices_and_preserve_domain_rules(self):
+        self.client.force_login(self.technician)
+
+        fact_page = self.client.get(reverse("fact_create", args=[self.incident.pk]))
+        self.assertContains(fact_page, "Selecione a origem")
+        self.assertContains(fact_page, "Salvar fato")
+        fact_response = self.client.post(
+            reverse("fact_create", args=[self.incident.pk]),
+            {"content": "Ruído acima do normal.", "source_type": Fact.SourceType.TECHNICIAN},
+        )
+        self.assertRedirects(
+            fact_response, reverse("incident_detail", args=[self.incident.pk])
+        )
+
+        evidence_page = self.client.get(
+            reverse("evidence_create", args=[self.incident.pk])
+        )
+        self.assertContains(evidence_page, "Selecione o tipo de fonte")
+        self.assertContains(evidence_page, "Salvar evidência")
+        invalid_evidence = self.client.post(
+            reverse("evidence_create", args=[self.incident.pk]),
+            {
+                "content": "Informação sem documento selecionado.",
+                "source_type": Evidence.SourceType.DOCUMENT,
+                "source_reference": "Página 34",
+            },
+        )
+        self.assertEqual(invalid_evidence.status_code, 200)
+        self.assertFalse(
+            self.investigation.evidence.filter(
+                content="Informação sem documento selecionado."
+            ).exists()
+        )
+
+        hypothesis_page = self.client.get(
+            reverse("hypothesis_create", args=[self.incident.pk])
+        )
+        self.assertContains(hypothesis_page, "possibilidade em investigação")
+        self.assertContains(hypothesis_page, "Salvar hipótese")
+        hypothesis_response = self.client.post(
+            reverse("hypothesis_create", args=[self.incident.pk]),
+            {"description": "Possível desalinhamento."},
+        )
+        self.assertEqual(hypothesis_response.status_code, 302)
+        hypothesis = self.investigation.hypotheses.get(
+            description="Possível desalinhamento."
+        )
+        self.assertEqual(hypothesis.status, Hypothesis.Status.ACTIVE)
+        self.assertEqual(self.incident.interventions.count(), 0)
+
 
 def _pdf_bytes(text=None):
     output = BytesIO()

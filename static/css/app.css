@@ -31,3 +31,13 @@ body {
     margin-bottom: .25rem;
 }
 
+.agent-response h1,
+.agent-response h2,
+.agent-response h3 {
+    font-size: 1.1rem;
+    margin-top: 1.25rem;
+}
+
+.agent-response hr {
+    color: #adb5bd;
+}
