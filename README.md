@@ -23,13 +23,22 @@ históricos e documentação técnica para auxiliar equipes de manutenção.
 A aplicação estará disponível em <http://localhost:8000/> e o health check em
 <http://localhost:8000/health/>.
 
+## Executar testes localmente
+
 Para executar as validações dentro do container:
 
 ```powershell
 docker compose exec web python manage.py check
-docker compose exec web python manage.py test
 docker compose exec web python manage.py makemigrations --check --dry-run
+docker compose exec web python manage.py migrate --check
+docker compose exec web python manage.py test
 ```
+
+## Integração contínua
+
+Pushes e Pull Requests executam automaticamente as validações do projeto por GitHub Actions, usando PostgreSQL. O CI utiliza apenas credenciais de teste e mocks/fakes para os providers; nenhuma API externa de LLM é chamada.
+
+> A validação comportamental multi-cenário da Fase 8 deve ser repetida quando houver um provider real com quota disponível.
 
 ## Primeiro acesso administrativo
 
