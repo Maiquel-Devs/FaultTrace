@@ -100,4 +100,55 @@
         <form method="post" action="{% url 'intervention_create' incident.pk %}" class="fault-form">{% csrf_token %}{{ intervention_form.as_p }}<button class="btn btn-success" type="submit">Registrar e resolver ocorrência</button></form>
     {% endif %}
 </div></section>
+
+<script>
+(() => {
+    const draftKey = "faulttrace_resolution_draft_{{ incident.organization_id }}_{{ incident.pk }}_{{ user.pk }}";
+
+    {% if incident.status == "RESOLVED" or incident.status == "CLOSED" %}
+        try {
+            localStorage.removeItem(draftKey);
+        } catch (error) {
+            // The completed resolution must not depend on browser storage access.
+        }
+    {% else %}
+    const form = document.querySelector(
+        'form[action="{% url 'intervention_create' incident.pk %}"]'
+    );
+    if (!form) {
+        return;
+    }
+
+    const fieldNames = ["action_taken", "confirmed_cause", "result"];
+    const fields = fieldNames.map((name) => form.elements.namedItem(name));
+
+    try {
+        const storedDraft = localStorage.getItem(draftKey);
+        if (storedDraft) {
+            const draft = JSON.parse(storedDraft);
+            fieldNames.forEach((name, index) => {
+                if (typeof draft[name] === "string" && fields[index].value === "") {
+                    fields[index].value = draft[name];
+                }
+            });
+        }
+    } catch (error) {
+        // Keep the form usable if storage is unavailable or contains invalid data.
+    }
+
+    const saveDraft = () => {
+        const draft = Object.fromEntries(
+            fieldNames.map((name, index) => [name, fields[index].value])
+        );
+        try {
+            localStorage.setItem(draftKey, JSON.stringify(draft));
+        } catch (error) {
+            // Browser storage is an enhancement and must not block submission.
+        }
+    };
+
+    fields.forEach((field) => field.addEventListener("input", saveDraft));
+    {% endif %}
+})();
+</script>
 {% endblock %}

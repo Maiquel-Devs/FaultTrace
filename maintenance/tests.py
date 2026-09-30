@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from accounts.models import Organization, User
 from assets.models import Equipment
@@ -91,6 +92,144 @@ class MaintenanceServiceTests(TestCase):
         self.assertEqual(investigation.status, Investigation.Status.FINISHED)
         self.assertIsNotNone(investigation.finished_at)
         self.assertEqual(intervention.confirmed_cause, "Vedação rompida.")
+        self.assertEqual(Intervention.objects.filter(incident=self.incident).count(), 1)
+
+
+class ResolutionDraftViewTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name="Industry Draft")
+        self.technician = User.objects.create_user(
+            username="draft-technician",
+            password="test-password",
+            organization=self.organization,
+            role=User.Role.TECHNICIAN,
+        )
+        equipment = Equipment.objects.create(
+            organization=self.organization,
+            name="Draft Compressor",
+            code="D-01",
+        )
+        self.incident = Incident.objects.create(
+            organization=self.organization,
+            equipment=equipment,
+            description="Pressure below target.",
+            reported_by=self.technician,
+        )
+        self.other_incident = Incident.objects.create(
+            organization=self.organization,
+            equipment=equipment,
+            description="Noise above target.",
+            reported_by=self.technician,
+        )
+        start_investigation(incident=self.incident, technician=self.technician)
+        start_investigation(incident=self.other_incident, technician=self.technician)
+        self.client.force_login(self.technician)
+
+    def draft_key(self, incident):
+        return (
+            "faulttrace_resolution_draft_"
+            f"{self.organization.pk}_{incident.pk}_{self.technician.pk}"
+        )
+
+    def test_active_investigation_enables_local_resolution_draft(self):
+        response = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
+
+        self.assertContains(response, self.draft_key(self.incident))
+        self.assertContains(response, "localStorage.getItem(draftKey)")
+        self.assertContains(response, "localStorage.setItem(draftKey, JSON.stringify(draft))")
+        self.assertContains(
+            response,
+            'const fieldNames = ["action_taken", "confirmed_cause", "result"]',
+        )
+        self.assertContains(response, "fields[index].value = draft[name]")
+        self.assertContains(response, 'field.addEventListener("input", saveDraft)')
+        self.assertNotContains(response, "innerHTML")
+
+    def test_draft_key_is_isolated_by_incident(self):
+        response = self.client.get(
+            reverse("incident_detail", args=[self.other_incident.pk])
+        )
+
+        self.assertContains(response, self.draft_key(self.other_incident))
+        self.assertNotContains(response, self.draft_key(self.incident))
+
+    def test_draft_key_is_isolated_by_organization(self):
+        other_organization = Organization.objects.create(name="Other Industry")
+        other_technician = User.objects.create_user(
+            username="other-draft-technician",
+            password="test-password",
+            organization=other_organization,
+            role=User.Role.TECHNICIAN,
+        )
+        other_equipment = Equipment.objects.create(
+            organization=other_organization,
+            name="Other Compressor",
+            code="O-01",
+        )
+        other_organization_incident = Incident.objects.create(
+            organization=other_organization,
+            equipment=other_equipment,
+            description="Other tenant incident.",
+            reported_by=other_technician,
+        )
+        start_investigation(
+            incident=other_organization_incident,
+            technician=other_technician,
+        )
+        self.client.force_login(other_technician)
+
+        response = self.client.get(
+            reverse("incident_detail", args=[other_organization_incident.pk])
+        )
+        other_key = (
+            "faulttrace_resolution_draft_"
+            f"{other_organization.pk}_{other_organization_incident.pk}_"
+            f"{other_technician.pk}"
+        )
+
+        self.assertContains(response, other_key)
+        self.assertNotContains(response, self.draft_key(self.incident))
+
+    def test_invalid_submission_keeps_draft_enabled_and_domain_unchanged(self):
+        response = self.client.post(
+            reverse("intervention_create", args=[self.incident.pk]),
+            {
+                "action_taken": "Partial adjustment.",
+                "confirmed_cause": "",
+                "result": "Test pending.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, self.draft_key(self.incident), status_code=400)
+        self.assertContains(
+            response,
+            "localStorage.setItem(draftKey, JSON.stringify(draft))",
+            status_code=400,
+        )
+        self.incident.refresh_from_db()
+        self.assertEqual(self.incident.status, Incident.Status.UNDER_INVESTIGATION)
+        self.assertFalse(Intervention.objects.filter(incident=self.incident).exists())
+
+    def test_successful_resolution_renders_draft_removal(self):
+        response = self.client.post(
+            reverse("intervention_create", args=[self.incident.pk]),
+            {
+                "action_taken": "Seal replacement.",
+                "confirmed_cause": "Broken seal.",
+                "result": "Pressure restored.",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response, reverse("incident_detail", args=[self.incident.pk])
+        )
+        self.assertContains(response, self.draft_key(self.incident))
+        self.assertContains(response, "localStorage.removeItem(draftKey)")
+        self.assertNotContains(response, "localStorage.setItem(draftKey")
+        self.incident.refresh_from_db()
+        self.assertEqual(self.incident.status, Incident.Status.RESOLVED)
         self.assertEqual(Intervention.objects.filter(incident=self.incident).count(), 1)
 
 
