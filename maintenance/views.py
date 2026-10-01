@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST, require_http_methods
 
 from accounts.models import User
@@ -165,6 +166,7 @@ def agent_investigate(request, pk):
         messages.error(request, "Informe uma pergunta válida para o assistente.")
         return redirect("incident_detail", pk=incident.pk)
 
+    result = None
     try:
         result = InvestigationAgent().run(
             investigation=investigation,
@@ -188,4 +190,7 @@ def agent_investigate(request, pk):
             messages.warning(request, result.content)
         else:
             messages.success(request, "Investigação assistida concluída.")
+    if result is not None and result.status != "TOOL_LIMIT_REACHED":
+        detail_url = reverse("incident_detail", kwargs={"pk": incident.pk})
+        return redirect(f"{detail_url}#agent-response")
     return redirect("incident_detail", pk=incident.pk)

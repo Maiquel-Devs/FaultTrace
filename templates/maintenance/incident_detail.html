@@ -33,7 +33,7 @@
     <h2 class="h4">Assistente de investigação</h2>
     <p class="text-body-secondary">O assistente pesquisa conhecimento do FaultTrace e organiza indícios. A conclusão continua sendo responsabilidade do técnico.</p>
     {% if agent_available %}
-        <form method="post" action="{% url 'agent_investigate' incident.pk %}" class="fault-form mb-4">
+        <form id="investigation-assistant-form" method="post" action="{% url 'agent_investigate' incident.pk %}" class="fault-form mb-4">
             {% csrf_token %}
             {{ agent_form.as_p }}
             <button class="btn btn-primary" type="submit">Investigar</button>
@@ -47,7 +47,7 @@
 
     {% if latest_agent_interaction %}
         <hr>
-        <h3 class="h5">Resposta</h3>
+        <h3 class="h5" id="agent-response">Resposta</h3>
         <div class="agent-response mb-3">{{ latest_agent_interaction.response|without_sources|safe_markdown }}</div>
         {% if latest_agent_interaction.sources %}
             <h4 class="h6">Fontes consultadas</h4>
@@ -103,6 +103,15 @@
 
 <script>
 (() => {
+    const agentForm = document.getElementById("investigation-assistant-form");
+    if (agentForm) {
+        agentForm.addEventListener("submit", () => {
+            const submitButton = agentForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = "Investigando...";
+        });
+    }
+
     const draftKey = "faulttrace_resolution_draft_{{ incident.organization_id }}_{{ incident.pk }}_{{ user.pk }}";
 
     {% if incident.status == "RESOLVED" or incident.status == "CLOSED" %}

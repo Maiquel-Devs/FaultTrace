@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from accounts.models import Organization, User
 from assets.models import Document, Equipment
+from config.models import AIConfiguration
 from knowledge.models import DocumentSection, Hypothesis
 from maintenance.models import Incident, Investigation
 
@@ -270,6 +271,55 @@ class InvestigationAgentTests(TestCase):
             "Nenhum provider de IA está configurado para esta organização.",
         )
         self.assertEqual(external.status_code, 404)
+
+    def test_successful_web_investigation_redirects_to_new_response(self):
+        configuration = AIConfiguration(
+            organization=self.organization,
+            provider=AIConfiguration.Provider.GROQ,
+            model="test-model",
+        )
+        configuration.set_api_key("test-api-key")
+        configuration.save()
+        provider = FakeLLMProvider([_response("Analysis complete.")])
+        self.client.force_login(self.user)
+
+        with patch("agent.core.get_active_provider", return_value=provider):
+            response = self.client.post(
+                reverse("agent_investigate", args=[self.incident.pk]),
+                {"question": "What should we investigate?"},
+            )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('incident_detail', args=[self.incident.pk])}#agent-response",
+            fetch_redirect_response=False,
+        )
+        interaction = AgentInteraction.objects.get()
+        self.assertEqual(interaction.investigation, self.investigation)
+        self.assertEqual(interaction.question, "What should we investigate?")
+        self.assertEqual(interaction.response, "Analysis complete.")
+
+        detail = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
+        self.assertContains(detail, 'id="agent-response"')
+        self.assertContains(detail, "Analysis complete.")
+        self.assertContains(detail, 'id="investigation-assistant-form"')
+        self.assertContains(detail, 'submitButton.textContent = "Investigando..."')
+
+    def test_web_configuration_error_keeps_default_redirect(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("agent_investigate", args=[self.incident.pk]),
+            {"question": "What should we investigate?"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("incident_detail", args=[self.incident.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertNotIn("#agent-response", response["Location"])
+        self.assertFalse(AgentInteraction.objects.exists())
 
     def test_markdown_is_rendered_and_model_html_is_escaped(self):
         rendered = str(
