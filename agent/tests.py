@@ -325,7 +325,13 @@ class InvestigationAgentTests(TestCase):
         rendered = str(
             safe_markdown(
                 "### Título\n\n**Importante**\n\n1. Primeiro\n2. Segundo\n\n"
-                "- Item\n\n---\n\n<script>alert('xss')</script>"
+                "- Item\n\n---\n\n"
+                "| Evidência | Relação |\n"
+                "| --- | --- |\n"
+                "| Corrente 18,2 A | Sustenta |\n\n"
+                "<script>alert('xss')</script>"
+                "\n\n<img src=x onerror=alert('xss')>"
+                "\n\n<div onclick=alert('xss')>perigoso</div>"
                 "\n\n[link perigoso](javascript:alert('xss'))"
             )
         )
@@ -335,9 +341,42 @@ class InvestigationAgentTests(TestCase):
         self.assertIn("<ol>", rendered)
         self.assertIn("<ul>", rendered)
         self.assertIn("<hr", rendered)
+        self.assertIn("<table>", rendered)
+        self.assertIn("<th>Evidência</th>", rendered)
+        self.assertIn("<th>Relação</th>", rendered)
+        self.assertIn("<td>Corrente 18,2 A</td>", rendered)
+        self.assertIn("<td>Sustenta</td>", rendered)
         self.assertNotIn("<script>", rendered)
+        self.assertNotIn("<img", rendered)
+        self.assertNotIn("<div onclick=", rendered)
         self.assertNotIn("<a ", rendered)
         self.assertIn("&lt;script&gt;", rendered)
+
+    def test_stored_markdown_table_is_rendered_without_changing_response(self):
+        stored_response = (
+            "| Evidência | Relação | Observação |\n"
+            "| --- | --- | --- |\n"
+            "| Corrente 18,2 A | Sustenta | Acima da nominal |\n"
+            "| Ventilação normal | Contradiz | Fluxo verificado |"
+        )
+        interaction = AgentInteraction.objects.create(
+            investigation=self.investigation,
+            user=self.user,
+            question="Analise as evidências.",
+            response=stored_response,
+            provider="GROQ",
+            model="stored-model",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("incident_detail", args=[self.incident.pk]))
+
+        self.assertContains(response, "<table>")
+        self.assertContains(response, "<th>Evidência</th>")
+        self.assertContains(response, "<td>Corrente 18,2 A</td>")
+        self.assertContains(response, "<td>Ventilação normal</td>")
+        interaction.refresh_from_db()
+        self.assertEqual(interaction.response, stored_response)
 
     def test_structured_sources_are_the_only_sources_section_rendered(self):
         provider = FakeLLMProvider(

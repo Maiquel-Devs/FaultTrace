@@ -41,3 +41,26 @@ body {
 .agent-response hr {
     color: #adb5bd;
 }
+
+.agent-response {
+    overflow-x: auto;
+}
+
+.agent-response table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+.agent-response th,
+.agent-response td {
+    padding: .5rem .75rem;
+    border: 1px solid #dee2e6;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.agent-response th {
+    background-color: #e9ecef;
+    font-weight: 600;
+}
