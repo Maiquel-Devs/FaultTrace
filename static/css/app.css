@@ -31,36 +31,126 @@ body {
     margin-bottom: .25rem;
 }
 
+.agent-response {
+    overflow-x: auto;
+    color: #212529;
+    line-height: 1.6;
+}
+
+.agent-response > :first-child {
+    margin-top: 0;
+}
+
+.agent-response > :last-child {
+    margin-bottom: 0;
+}
+
 .agent-response h1,
 .agent-response h2,
+.agent-response h3,
+.agent-response h4,
+.agent-response h5,
+.agent-response h6 {
+    margin: 1.5rem 0 .625rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.agent-response h1 {
+    font-size: 1.35rem;
+}
+
+.agent-response h2 {
+    font-size: 1.2rem;
+}
+
 .agent-response h3 {
     font-size: 1.1rem;
-    margin-top: 1.25rem;
+}
+
+.agent-response h4,
+.agent-response h5,
+.agent-response h6 {
+    font-size: 1rem;
+}
+
+.agent-response p {
+    margin: 0 0 1rem;
+}
+
+.agent-response ul,
+.agent-response ol {
+    margin: .5rem 0 1rem;
+    padding-left: 1.5rem;
+}
+
+.agent-response li {
+    padding-left: .125rem;
+}
+
+.agent-response li + li {
+    margin-top: .35rem;
+}
+
+.agent-response li > ul,
+.agent-response li > ol {
+    margin: .35rem 0 0;
+}
+
+.agent-response blockquote {
+    margin: 1rem 0;
+    padding: .75rem 1rem;
+    border-left: .25rem solid #adb5bd;
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.agent-response blockquote > :last-child {
+    margin-bottom: 0;
 }
 
 .agent-response hr {
+    margin: 1.5rem 0;
     color: #adb5bd;
-}
-
-.agent-response {
-    overflow-x: auto;
 }
 
 .agent-response table {
     width: 100%;
-    margin-bottom: 1rem;
-    border-collapse: collapse;
+    max-width: 100%;
+    margin: .75rem 0 1.25rem;
+    border: 1px solid #adb5bd;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
+    background-color: #fff;
 }
 
 .agent-response th,
 .agent-response td {
-    padding: .5rem .75rem;
-    border: 1px solid #dee2e6;
+    padding: .875rem 1rem;
+    border: 0;
     vertical-align: top;
-    overflow-wrap: anywhere;
+    line-height: 1.55;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: auto;
 }
 
-.agent-response th {
-    background-color: #e9ecef;
+.agent-response thead th {
+    background-color: #e2e6ea;
+    border-bottom: 2px solid #8d959d;
     font-weight: 600;
+}
+
+.agent-response th + th,
+.agent-response td + td {
+    border-left: 1px solid #adb5bd;
+}
+
+.agent-response tbody tr + tr > td {
+    border-top: 1px solid #ced4da;
+}
+
+.agent-response tbody tr:nth-child(even) > td {
+    background-color: #f3f5f7;
 }

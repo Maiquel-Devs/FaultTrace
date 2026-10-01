@@ -1,4 +1,5 @@
 import json
+import logging
 
 from anthropic import Anthropic
 from google import genai
@@ -9,6 +10,9 @@ from openai import OpenAI
 
 from .contracts import LLMMessage, LLMProvider, LLMResponse, ToolCall
 from .errors import LLMProviderError
+
+
+logger = logging.getLogger(__name__)
 
 
 def _provider_error(provider):
@@ -155,9 +159,25 @@ class GroqProvider(LLMProvider):
                 for call in (getattr(response_message, "tool_calls", None) or ())
             )
             content = _require_response(response_message.content, tool_calls, "Groq")
-        except LLMProviderError:
+        except LLMProviderError as error:
+            logger.error(
+                "LLM provider response failed: provider=%s model=%s type=%s reason=%s",
+                self.provider_name,
+                self.model,
+                type(error).__name__,
+                str(error),
+            )
             raise
-        except Exception:
+        except Exception as error:
+            logger.error(
+                "LLM provider request failed: provider=%s model=%s type=%s "
+                "status=%s request_id=%s",
+                self.provider_name,
+                self.model,
+                type(error).__name__,
+                getattr(error, "status_code", None),
+                getattr(error, "request_id", None),
+            )
             raise _provider_error("Groq") from None
         return LLMResponse(
             content=content,

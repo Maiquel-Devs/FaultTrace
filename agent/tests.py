@@ -321,6 +321,26 @@ class InvestigationAgentTests(TestCase):
         self.assertNotIn("#agent-response", response["Location"])
         self.assertFalse(AgentInteraction.objects.exists())
 
+    def test_web_provider_error_keeps_safe_message_and_does_not_persist(self):
+        self.client.force_login(self.user)
+
+        with patch(
+            "maintenance.views.InvestigationAgent.run",
+            side_effect=LLMProviderError("technical provider detail"),
+        ):
+            response = self.client.post(
+                reverse("agent_investigate", args=[self.incident.pk]),
+                {"question": "What should we investigate?"},
+                follow=True,
+            )
+
+        self.assertContains(
+            response,
+            "Não foi possível concluir a investigação com o provider configurado.",
+        )
+        self.assertNotContains(response, "technical provider detail")
+        self.assertFalse(AgentInteraction.objects.exists())
+
     def test_markdown_is_rendered_and_model_html_is_escaped(self):
         rendered = str(
             safe_markdown(
@@ -409,6 +429,125 @@ class InvestigationAgentTests(TestCase):
         self.assertContains(response, "Fontes consultadas", count=1)
         self.assertNotContains(response, "Fonte inventada pelo texto")
         self.assertContains(response, f"Ocorrência #{self.past_incident.pk}")
+
+
+class SafeMarkdownTableTests(TestCase):
+    def assert_table_structure(self, rendered):
+        for tag in ("table", "thead", "tbody", "tr", "th", "td"):
+            self.assertIn(f"<{tag}", rendered)
+
+    def test_valid_table_with_blank_line_before_is_rendered(self):
+        rendered = str(
+            safe_markdown(
+                "Introduction.\n\n"
+                "| Item | Information |\n"
+                "| --- | --- |\n"
+                "| E07 | Thermal protection |"
+            )
+        )
+
+        self.assert_table_structure(rendered)
+        self.assertIn("<th>Item</th>", rendered)
+        self.assertIn("<td>Thermal protection</td>", rendered)
+
+    def test_valid_table_without_blank_line_matches_real_response_shape(self):
+        rendered = str(
+            safe_markdown(
+                "**Evidencias relevantes**  \n"
+                "| Tipo | Conteudo | Fonte |\n"
+                "| ---- | -------- | ----- |\n"
+                "| Fato | Codigo E07 | Tecnico |"
+            )
+        )
+
+        self.assert_table_structure(rendered)
+        self.assertIn("<strong>Evidencias relevantes</strong>", rendered)
+        self.assertIn("<th>Fonte</th>", rendered)
+        self.assertIn("<td>Codigo E07</td>", rendered)
+
+    def test_lf_and_crlf_are_preserved_for_table_recognition(self):
+        for line_ending in ("\n", "\r\n"):
+            with self.subTest(line_ending=repr(line_ending)):
+                source = line_ending.join(
+                    (
+                        "Previous text.",
+                        "| A | B |",
+                        "| --- | --- |",
+                        "| 1 | 2 |",
+                    )
+                )
+
+                rendered = str(safe_markdown(source))
+
+                self.assert_table_structure(rendered)
+                self.assertIn("<td>1</td>", rendered)
+
+    def test_tables_with_two_three_and_more_columns_are_rendered(self):
+        for column_count in (2, 3, 5):
+            with self.subTest(column_count=column_count):
+                headers = [f"H{index}" for index in range(column_count)]
+                values = [f"V{index}" for index in range(column_count)]
+                source = (
+                    "Section\n"
+                    f"| {' | '.join(headers)} |\n"
+                    f"| {' | '.join(['---'] * column_count)} |\n"
+                    f"| {' | '.join(values)} |"
+                )
+
+                rendered = str(safe_markdown(source))
+
+                self.assert_table_structure(rendered)
+                self.assertEqual(rendered.count("<th>"), column_count)
+                self.assertEqual(rendered.count("<td>"), column_count)
+
+    def test_plain_pipe_text_and_invalid_delimiter_do_not_become_tables(self):
+        cases = (
+            "Pressure | current are related readings.\nFollowing text.",
+            "Introduction\n| A | B |\n| -- | invalid |\n| 1 | 2 |",
+        )
+
+        for source in cases:
+            with self.subTest(source=source):
+                rendered = str(safe_markdown(source))
+
+                self.assertNotIn("<table>", rendered)
+
+    def test_adjacent_lists_and_paragraphs_keep_their_structure(self):
+        rendered = str(
+            safe_markdown(
+                "- First\n"
+                "- Second\n\n"
+                "Previous paragraph.\n"
+                "| A | B |\n"
+                "| --- | --- |\n"
+                "| 1 | 2 |\n\n"
+                "Following paragraph."
+            )
+        )
+
+        self.assertIn("<ul>", rendered)
+        self.assertIn("<p>Previous paragraph.</p>", rendered)
+        self.assert_table_structure(rendered)
+        self.assertIn("<p>Following paragraph.</p>", rendered)
+
+    def test_security_pipeline_remains_active_with_normalized_table(self):
+        rendered = str(
+            safe_markdown(
+                "<script>alert('xss')</script>\n\n"
+                "<div onclick=alert('xss')>dangerous</div>\n\n"
+                "[dangerous link](javascript:alert('xss'))\n\n"
+                "Previous text.\n"
+                "| A | B |\n"
+                "| --- | --- |\n"
+                "| 1 | 2 |"
+            )
+        )
+
+        self.assert_table_structure(rendered)
+        self.assertNotIn("<script>", rendered)
+        self.assertNotIn("<div onclick=", rendered)
+        self.assertNotIn("<a ", rendered)
+        self.assertIn("&lt;script&gt;", rendered)
 
 
 class ProviderToolCallingTests(TestCase):
@@ -648,8 +787,75 @@ class GroqProviderTests(TestCase):
                 ]
             )
 
-            with self.assertRaisesRegex(LLMProviderError, "resposta vazia"):
-                GroqProvider(api_key="key", model="model").test_connection()
+            with self.assertLogs("agent.providers", level="ERROR") as logs:
+                with self.assertRaisesRegex(LLMProviderError, "resposta vazia"):
+                    GroqProvider(api_key="key", model="model").test_connection()
+
+        output = "\n".join(logs.output)
+        self.assertIn("provider=GROQ", output)
+        self.assertIn("model=model", output)
+        self.assertIn("type=LLMProviderError", output)
+        self.assertIn("Groq retornou uma resposta vazia.", output)
+
+    def test_invalid_tool_arguments_are_logged_without_payload(self):
+        invalid_payload = "not-json-sensitive-payload"
+        native_call = SimpleNamespace(
+            id="groq-native",
+            index=0,
+            function=SimpleNamespace(
+                name="search_documentation",
+                arguments=invalid_payload,
+            ),
+        )
+        with patch("agent.providers.Groq") as sdk:
+            client = sdk.return_value.__enter__.return_value
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=None, tool_calls=[native_call])
+                    )
+                ]
+            )
+
+            with self.assertLogs("agent.providers", level="ERROR") as logs:
+                with self.assertRaisesRegex(LLMProviderError, "Tool inválidos"):
+                    GroqProvider(api_key="key", model="model").generate(self.messages)
+
+        output = "\n".join(logs.output)
+        self.assertIn("type=LLMProviderError", output)
+        self.assertIn("argumentos de Tool inválidos", output)
+        self.assertNotIn(invalid_payload, output)
+
+    def test_sdk_failures_log_safe_technical_metadata(self):
+        secret = "groq-secret-key"
+        prompt = self.messages[0].content
+        cases = (
+            ("APITimeoutError", None, None),
+            ("RateLimitError", 429, "request-rate-limit"),
+            ("BadRequestError", 400, "request-bad-request"),
+        )
+
+        for exception_name, status_code, request_id in cases:
+            with self.subTest(exception_name=exception_name):
+                exception_class = type(exception_name, (Exception,), {})
+                error = exception_class(f"sensitive failure: {secret}; {prompt}")
+                error.status_code = status_code
+                error.request_id = request_id
+                provider = GroqProvider(api_key=secret, model="test-model")
+
+                with patch("agent.providers.Groq", side_effect=error):
+                    with self.assertLogs("agent.providers", level="ERROR") as logs:
+                        with self.assertRaises(LLMProviderError):
+                            provider.generate(self.messages)
+
+                output = "\n".join(logs.output)
+                self.assertIn("provider=GROQ", output)
+                self.assertIn("model=test-model", output)
+                self.assertIn(f"type={exception_name}", output)
+                self.assertIn(f"status={status_code}", output)
+                self.assertIn(f"request_id={request_id}", output)
+                self.assertNotIn(secret, output)
+                self.assertNotIn(prompt, output)
 
     def test_sdk_error_is_controlled_and_does_not_expose_api_key(self):
         secret = "groq-secret-key"
@@ -658,9 +864,12 @@ class GroqProviderTests(TestCase):
             "agent.providers.Groq",
             side_effect=RuntimeError(f"authorization failed: {secret}"),
         ):
-            with self.assertRaises(LLMProviderError) as captured:
-                provider.generate(self.messages)
+            with self.assertLogs("agent.providers", level="ERROR") as logs:
+                with self.assertRaises(LLMProviderError) as captured:
+                    provider.generate(self.messages)
 
+        output = "\n".join(logs.output)
         self.assertNotIn(secret, str(captured.exception))
         self.assertNotIn(secret, repr(captured.exception))
+        self.assertNotIn(secret, output)
         self.assertIsNone(captured.exception.__cause__)
