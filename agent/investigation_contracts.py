@@ -24,6 +24,18 @@ class ContractValidationError(ValueError):
         super().__init__(f"{path}: {message}")
 
 
+class StructuralContractError(ContractValidationError):
+    """Raised when JSON values do not match the declared V1 structure."""
+
+
+class ReferenceContractError(ContractValidationError):
+    """Raised when identity or reference integrity is violated."""
+
+
+class SemanticInvariantError(ContractValidationError):
+    """Raised when a cross-field semantic invariant is violated."""
+
+
 class ContractParseError(ValueError):
     """Raised when text is not valid JSON."""
 
@@ -65,7 +77,7 @@ class SourceCatalog:
             if not isinstance(entry, SourceCatalogEntry):
                 raise TypeError("SourceCatalog accepts SourceCatalogEntry values.")
             if entry.ref in by_ref:
-                raise ContractValidationError(
+                raise ReferenceContractError(
                     "source_catalog", f"duplicate source reference {entry.ref!r}"
                 )
             by_ref[entry.ref] = entry
@@ -93,7 +105,7 @@ class RegisteredHypothesisCatalog:
         for index, value in enumerate(refs):
             ref = _text(value, f"registered_hypothesis_catalog[{index}]")
             if ref in normalized:
-                raise ContractValidationError(
+                raise ReferenceContractError(
                     "registered_hypothesis_catalog",
                     f"duplicate registered hypothesis reference {ref!r}",
                 )
@@ -285,7 +297,7 @@ def parse_investigation_result(
     root = _object(payload, "$", TOP_LEVEL_FIELDS)
     schema_version = _text(root["schema_version"], "$.schema_version")
     if schema_version != "1.0":
-        raise ContractValidationError(
+        raise StructuralContractError(
             "$.schema_version", "expected the literal '1.0'"
         )
 
@@ -387,7 +399,7 @@ def _parse_contradiction(value: Any, path: str) -> Contradiction:
     )
     finding_refs = _refs(item["finding_refs"], f"{path}.finding_refs")
     if len(finding_refs) != 2:
-        raise ContractValidationError(
+        raise StructuralContractError(
             f"{path}.finding_refs", "expected exactly two distinct finding references"
         )
     return Contradiction(
@@ -412,11 +424,11 @@ def _parse_hypothesis(value: Any, path: str) -> HypothesisAnalysis:
     origin = _enum(item["origin"], f"{path}.origin", HypothesisOrigin)
     has_registered_ref = "registered_ref" in item
     if origin is HypothesisOrigin.REGISTERED and not has_registered_ref:
-        raise ContractValidationError(
+        raise StructuralContractError(
             path, "REGISTERED hypotheses require registered_ref"
         )
     if origin is HypothesisOrigin.PROPOSED and has_registered_ref:
-        raise ContractValidationError(
+        raise StructuralContractError(
             path, "PROPOSED hypotheses must not contain registered_ref"
         )
     registered_ref = (
@@ -432,7 +444,7 @@ def _parse_hypothesis(value: Any, path: str) -> HypothesisAnalysis:
     )
     overlap = set(supporting) & set(opposing)
     if overlap:
-        raise ContractValidationError(
+        raise SemanticInvariantError(
             path,
             "supporting and opposing references must be disjoint: "
             + ", ".join(sorted(overlap)),
@@ -443,15 +455,15 @@ def _parse_hypothesis(value: Any, path: str) -> HypothesisAnalysis:
         EvidenceAssessment,
     )
     if assessment is EvidenceAssessment.MIXED and (not supporting or not opposing):
-        raise ContractValidationError(
+        raise SemanticInvariantError(
             path, "MIXED requires supporting and opposing findings"
         )
     if assessment is EvidenceAssessment.LEANS_SUPPORTING and not supporting:
-        raise ContractValidationError(
+        raise SemanticInvariantError(
             path, "LEANS_SUPPORTING requires a supporting finding"
         )
     if assessment is EvidenceAssessment.LEANS_OPPOSING and not opposing:
-        raise ContractValidationError(
+        raise SemanticInvariantError(
             path, "LEANS_OPPOSING requires an opposing finding"
         )
     return HypothesisAnalysis(
@@ -502,7 +514,7 @@ def _validate_references(
 
     def register(local_id: str, kind: str, path: str):
         if local_id in ids:
-            raise ContractValidationError(
+            raise ReferenceContractError(
                 path, f"duplicate local id {local_id!r}; first used as {ids[local_id]}"
             )
         ids[local_id] = kind
@@ -542,12 +554,12 @@ def _validate_references(
         path = f"$.hypotheses[{index}]"
         if item.origin is HypothesisOrigin.REGISTERED:
             if item.registered_ref not in registered_hypothesis_catalog:
-                raise ContractValidationError(
+                raise ReferenceContractError(
                     f"{path}.registered_ref",
                     f"unauthorized registered hypothesis {item.registered_ref!r}",
                 )
             if item.registered_ref in registered_refs:
-                raise ContractValidationError(
+                raise ReferenceContractError(
                     f"{path}.registered_ref",
                     f"registered hypothesis {item.registered_ref!r} is already used",
                 )
@@ -579,7 +591,7 @@ def _validate_source_refs(
 ) -> None:
     for index, ref in enumerate(refs):
         if ref not in source_catalog:
-            raise ContractValidationError(
+            raise ReferenceContractError(
                 f"{path}[{index}]", f"unauthorized source reference {ref!r}"
             )
 
@@ -592,9 +604,9 @@ def _require_ref(
 ) -> None:
     kind = ids.get(ref)
     if kind is None:
-        raise ContractValidationError(path, f"unknown local reference {ref!r}")
+        raise ReferenceContractError(path, f"unknown local reference {ref!r}")
     if kind not in allowed_kinds:
-        raise ContractValidationError(
+        raise ReferenceContractError(
             path, f"reference {ref!r} points to disallowed type {kind!r}"
         )
 
@@ -606,17 +618,17 @@ def _object(
     optional: Iterable[str] = (),
 ) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise ContractValidationError(path, "expected an object")
+        raise StructuralContractError(path, "expected an object")
     required_fields = frozenset(required)
     allowed_fields = required_fields | frozenset(optional)
     missing = required_fields - set(value)
     if missing:
-        raise ContractValidationError(
+        raise StructuralContractError(
             path, "missing fields: " + ", ".join(sorted(missing))
         )
     additional = set(value) - allowed_fields
     if additional:
-        raise ContractValidationError(
+        raise StructuralContractError(
             path, "unexpected fields: " + ", ".join(sorted(additional))
         )
     return value
@@ -624,16 +636,16 @@ def _object(
 
 def _array(value: Any, path: str) -> list[Any]:
     if not isinstance(value, list):
-        raise ContractValidationError(path, "expected an array")
+        raise StructuralContractError(path, "expected an array")
     return value
 
 
 def _text(value: Any, path: str) -> str:
     if not isinstance(value, str):
-        raise ContractValidationError(path, "expected a string")
+        raise StructuralContractError(path, "expected a string")
     normalized = unicodedata.normalize("NFC", value).strip()
     if not normalized:
-        raise ContractValidationError(path, "expected a non-empty string")
+        raise StructuralContractError(path, "expected a non-empty string")
     return normalized
 
 
@@ -643,16 +655,16 @@ def _refs(value: Any, path: str, minimum: int = 0) -> tuple[str, ...]:
         for index, item in enumerate(_array(value, path))
     )
     if len(refs) < minimum:
-        raise ContractValidationError(path, f"expected at least {minimum} reference(s)")
+        raise StructuralContractError(path, f"expected at least {minimum} reference(s)")
     if len(set(refs)) != len(refs):
-        raise ContractValidationError(path, "duplicate references are not allowed")
+        raise ReferenceContractError(path, "duplicate references are not allowed")
     return refs
 
 
 def _local_id(value: Any, path: str, kind: str) -> str:
     local_id = _text(value, path)
     if not _ID_PATTERNS[kind].fullmatch(local_id):
-        raise ContractValidationError(
+        raise StructuralContractError(
             path, f"expected an id with the {kind}_ prefix"
         )
     return local_id
@@ -664,4 +676,4 @@ def _enum(value: Any, path: str, enum_class: type[Enum]):
         return enum_class(text)
     except ValueError:
         allowed = ", ".join(item.value for item in enum_class)
-        raise ContractValidationError(path, f"expected one of: {allowed}") from None
+        raise StructuralContractError(path, f"expected one of: {allowed}") from None
