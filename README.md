@@ -1,39 +1,52 @@
 # FaultTrace
 
-Plataforma de investigação de falhas em equipamentos que conecta evidências,
-históricos e documentação técnica para auxiliar equipes de manutenção.
+Plataforma Django para investigação de falhas em equipamentos, conectando fatos,
+evidências com proveniência, histórico, documentação técnica, hipóteses,
+contradições e próximos checks. O diagnóstico final continua pertencendo ao
+técnico; o Agent não deve transformar pistas em causa confirmada.
+
+## Documentação
+
+Para continuidade assistida por IA, leia primeiro
+[`docs/HANDOFF.md`](docs/HANDOFF.md).
+
+- [Visão geral do projeto](docs/PROJECT_OVERVIEW.md)
+- [Arquitetura do sistema](docs/ARCHITECTURE.md)
+- [Arquitetura dos Agents](docs/AGENT_ARCHITECTURE.md)
+- [Contrato InvestigationResultV1](docs/INVESTIGATION_CONTRACT_V1.md)
+- [Histórico de desenvolvimento](docs/DEVELOPMENT_HISTORY.md)
+- [Handoff e estado atual](docs/HANDOFF.md)
+
+O Agent usado pela interface atual é o fluxo legado. O fluxo estruturado com
+`InvestigationResultV1` ainda é experimental, não possui persistência/UI e não
+deve substituir o legado sem nova decisão arquitetural.
 
 ## Desenvolvimento local
 
-1. Crie o arquivo de ambiente:
+1. Crie o arquivo de ambiente e substitua os valores de exemplo:
 
    ```powershell
    Copy-Item .env.example .env
    ```
 
-2. Substitua os valores de exemplo de `DJANGO_SECRET_KEY` e
-   `POSTGRES_PASSWORD` no `.env`.
-
-3. Construa e inicie os serviços:
+2. Construa e inicie os serviços:
 
    ```powershell
    docker compose up --build
    ```
 
-   O código da aplicação é copiado para a imagem e não é montado no container.
-   Portanto, depois de alterar Python, templates ou arquivos estáticos, reconstrua
-   o serviço antes de validar a mudança no navegador:
+A aplicação ficará em <http://localhost:8000/>, o health check em
+<http://localhost:8000/health/> e o login em
+<http://localhost:8000/accounts/login/>.
 
-   ```powershell
-   docker compose up --build -d web
-   ```
+O código é copiado para a imagem, sem bind mount. Depois de alterar Python,
+templates ou arquivos estáticos, reconstrua o serviço:
 
-A aplicação estará disponível em <http://localhost:8000/> e o health check em
-<http://localhost:8000/health/>.
+```powershell
+docker compose up --build -d web
+```
 
-## Executar testes localmente
-
-Para executar as validações dentro do container:
+## Validação
 
 ```powershell
 docker compose exec web python manage.py check
@@ -42,56 +55,30 @@ docker compose exec web python manage.py migrate --check
 docker compose exec web python manage.py test
 ```
 
-Funcionalidades dependentes de APIs do navegador, como persistência em
-`localStorage`, também exigem validação manual em um navegador real após o
-rebuild da imagem.
-
-## Integração contínua
-
-Pushes e Pull Requests executam automaticamente as validações do projeto por GitHub Actions, usando PostgreSQL. O CI utiliza apenas credenciais de teste e mocks/fakes para os providers; nenhuma API externa de LLM é chamada.
-
-> A validação comportamental multi-cenário da Fase 8 deve ser repetida quando houver um provider real com quota disponível.
+O CI executa essas validações com PostgreSQL e providers mockados/fakes; nenhuma
+API externa de LLM é chamada.
 
 ## Primeiro acesso administrativo
 
-Como todo usuário pertence obrigatoriamente a uma empresa, crie primeiro a
-organização pelo shell administrativo:
+Todo usuário pertence obrigatoriamente a uma organização. Crie a organização e
+depois o superusuário:
 
 ```powershell
 docker compose exec web python manage.py shell -c "from accounts.models import Organization; Organization.objects.get_or_create(name='Empresa Exemplo')"
-```
-
-Em seguida, crie o superusuário e informe o ID dessa organização quando
-solicitado:
-
-```powershell
 docker compose exec web python manage.py createsuperuser
 ```
 
-O login da aplicação fica em <http://localhost:8000/accounts/login/>. Usuários
-com papel `ADMIN` podem cadastrar equipamentos e documentos; usuários
-`ADMIN` e `TECHNICIAN` podem registrar ocorrências, investigações e
-intervenções.
-
-> Ao atualizar uma instalação da Fase 1, use um banco vazio antes de aplicar
-> estas migrations. O custom user foi introduzido agora, antes da existência de
-> dados de domínio, e passa a ser dependência das migrations administrativas do
-> Django.
+Usuários `ADMIN` podem cadastrar equipamentos, documentos e configuração de IA.
+Usuários autenticados da organização operam ocorrências e investigações conforme
+as validações do domínio.
 
 ## Cenário de demonstração
-
-Com os serviços em execução, prepare o cenário determinístico do Compressor C-04:
 
 ```powershell
 docker compose exec web python manage.py seed_demo --password "escolha-uma-senha-local"
 ```
 
-O comando pode ser executado novamente sem duplicar os registros principais. Ele
-cria a organização `FaultTrace Demo`, o usuário `demo_admin`, equipamento,
-ocorrência atual, histórico, fatos, evidências, hipótese e o PDF fictício
-`Manual AX-200`. A senha é recebida somente pela linha de comando e não fica
-armazenada no repositório.
-
-Entre com `demo_admin` e a senha informada. Para executar o Assistente de
-investigação, configure um provider de IA pela tela de Configurações usando sua
-própria credencial.
+O comando idempotente cria dados sintéticos do Compressor C-04, incluindo
+histórico, conhecimento e PDF fictício. A senha é recebida pela linha de comando
+e não deve ser versionada. Para usar o Agent legado, configure um provider pela
+tela de Configurações com uma credencial própria.
