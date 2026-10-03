@@ -15,7 +15,12 @@ from .contracts import ToolCall
 from .core import MAX_TOOL_ROUNDS
 from .investigation_context import SourceKind
 from .investigation_context_adapter import build_authorized_investigation_context
-from .investigation_producer_policy import ProducerFailureCategory
+from .investigation_contracts import StructuralContractError
+from .investigation_producer_policy import (
+    SAFE_VALIDATION_INSTRUCTIONS,
+    ProducerFailureCategory,
+    safe_validation_feedback,
+)
 from .investigation_structured_orchestrator import (
     DEFAULT_MAX_TOOL_ROUNDS,
     StructuredExecutionStatus,
@@ -152,6 +157,128 @@ class StructuredInvestigationOrchestratorTests(TestCase):
         self.assertEqual(execution.validation_attempts, 1)
         self.assertEqual(execution.retry_count, 0)
         self.assertEqual(len(producer.inputs), 1)
+        self.assertEqual(execution.validation_failures, ())
+
+    def test_validation_failure_audit_records_safe_canonical_metadata(self):
+        _, current_ref = self._initial_refs()
+        valid = self._payload(current_ref)
+
+        structural = self._payload(current_ref)
+        structural.pop("summary")
+        reference = self._payload("src_UNTRUSTED_VALUE")
+        semantic = self._payload(current_ref)
+        semantic["hypotheses"] = [
+            {
+                "id": "hypothesis_1",
+                "origin": "PROPOSED",
+                "statement": "Hipótese sem relações suficientes.",
+                "evidence_assessment": "MIXED",
+                "supporting_finding_refs": [],
+                "opposing_finding_refs": [],
+                "rationale": "Rationale sintético.",
+            }
+        ]
+        cases = (
+            (
+                "RAW_OUTPUT_SECRET_NOT_JSON",
+                ProducerFailureCategory.SYNTAX_FAILURE,
+                None,
+            ),
+            (
+                json.dumps(structural),
+                ProducerFailureCategory.STRUCTURAL_CONTRACT_FAILURE,
+                "$",
+            ),
+            (
+                json.dumps(reference),
+                ProducerFailureCategory.REFERENCE_FAILURE,
+                "$.problem.source_refs[0]",
+            ),
+            (
+                json.dumps(semantic),
+                ProducerFailureCategory.SEMANTIC_INVARIANT_FAILURE,
+                "$.hypotheses[0]",
+            ),
+        )
+
+        for invalid_raw, category, expected_path in cases:
+            with self.subTest(category=category):
+                execution, producer = self._run(
+                    [
+                        FinalResultTurn(invalid_raw),
+                        FinalResultTurn(json.dumps(valid)),
+                    ]
+                )
+                failure = execution.validation_failures[0]
+
+                self.assertEqual(execution.status, StructuredExecutionStatus.SUCCESS)
+                self.assertEqual(execution.retry_count, 1)
+                self.assertEqual(failure.round_number, 1)
+                self.assertEqual(failure.attempt, 1)
+                self.assertEqual(failure.category, category)
+                self.assertEqual(failure.path, expected_path)
+                self.assertEqual(
+                    failure.instruction,
+                    SAFE_VALIDATION_INSTRUCTIONS[category],
+                )
+                self.assertEqual(
+                    producer.inputs[1].validation_feedback,
+                    {
+                        "category": category.value,
+                        "instruction": SAFE_VALIDATION_INSTRUCTIONS[category],
+                        **({"path": expected_path} if expected_path else {}),
+                    },
+                )
+
+    def test_untrusted_path_content_is_omitted_from_safe_feedback(self):
+        error = StructuralContractError(
+            '$.hypotheses["MODEL_SUPPLIED_SECRET"]',
+            "INVALID_VALUE_SECRET",
+        )
+
+        feedback = safe_validation_feedback(error)
+        serialized = json.dumps(feedback)
+
+        self.assertEqual(
+            feedback,
+            {
+                "category": "STRUCTURAL_CONTRACT_FAILURE",
+                "instruction": SAFE_VALIDATION_INSTRUCTIONS[
+                    ProducerFailureCategory.STRUCTURAL_CONTRACT_FAILURE
+                ],
+            },
+        )
+        self.assertNotIn("MODEL_SUPPLIED_SECRET", serialized)
+        self.assertNotIn("INVALID_VALUE_SECRET", serialized)
+
+    def test_validation_audit_survives_a_later_producer_failure(self):
+        execution, producer = self._run(
+            [
+                FinalResultTurn("RAW_OUTPUT_EPHEMERAL"),
+                StructuredProducerError("provider failure without raw"),
+            ]
+        )
+
+        self.assertEqual(
+            execution.status,
+            StructuredExecutionStatus.PRODUCER_ERROR,
+        )
+        self.assertEqual(len(execution.validation_failures), 1)
+        failure = execution.validation_failures[0]
+        self.assertEqual(failure.round_number, 1)
+        self.assertEqual(failure.attempt, 1)
+        self.assertEqual(
+            failure.category,
+            ProducerFailureCategory.SYNTAX_FAILURE,
+        )
+        self.assertIsNone(failure.path)
+        self.assertEqual(
+            failure.instruction,
+            SAFE_VALIDATION_INSTRUCTIONS[
+                ProducerFailureCategory.SYNTAX_FAILURE
+            ],
+        )
+        self.assertEqual(producer.inputs[1].round_number, 2)
 
     def test_invalid_json_gets_one_safe_retry_and_succeeds(self):
         _, current_ref = self._initial_refs()

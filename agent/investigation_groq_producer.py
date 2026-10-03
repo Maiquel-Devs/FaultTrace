@@ -238,13 +238,18 @@ class GroqStructuredInvestigationProducer(StructuredInvestigationProducer):
                 name=name,
                 arguments=arguments,
             )
-            self._messages.append(
-                {
-                    "role": "assistant",
-                    "content": getattr(message, "content", None),
-                    "tool_calls": [_groq_tool_call(tool_call)],
-                }
-            )
+            assistant_message = {
+                "role": "assistant",
+                "content": getattr(message, "content", None),
+                "tool_calls": [_groq_tool_call(tool_call)],
+            }
+            # GPT-OSS returns reasoning separately by default.  Groq's
+            # documented tool loop replays the complete assistant message;
+            # preserve that provider field in memory for protocol continuity.
+            reasoning = getattr(message, "reasoning", None)
+            if isinstance(reasoning, str) and reasoning:
+                assistant_message["reasoning"] = reasoning
+            self._messages.append(assistant_message)
             self._pending_tool_call = tool_call
             return ToolRequestTurn(tool_call)
 

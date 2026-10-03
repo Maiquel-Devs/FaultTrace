@@ -1,0 +1,151 @@
+{
+  "phase": "4.1",
+  "provider": "GROQ",
+  "model": "openai/gpt-oss-120b",
+  "execution_order": [
+    "R2",
+    "T1"
+  ],
+  "stopped_for_rate_limit": true,
+  "agent_interactions_before": 4,
+  "agent_interactions_after": 4,
+  "database_results_persisted": false,
+  "duration_seconds": 11.664,
+  "cases": [
+    {
+      "case_id": "R2",
+      "title": "Round-trip real com documentação autorizada",
+      "domain": "motor elétrico",
+      "problem_input": "O motor parou com alarme térmico T17; o significado do código e o procedimento de verificação não constam nos dados iniciais.",
+      "provided_facts": [
+        "O código exibido no desligamento foi T17."
+      ],
+      "provided_evidence": [],
+      "trap": [
+        "Usar a seção documental recuperada sem converter o código em causa confirmada."
+      ],
+      "expected_behavior": [
+        "Recomendar verificação coerente de ventilação, corrente ou temperatura."
+      ],
+      "orchestrator_status": "PRODUCER_ERROR",
+      "rounds": 2,
+      "tools": [
+        {
+          "round": 1,
+          "name": "search_documentation",
+          "arguments": {
+            "query": "Motor sintético R2 T17 thermal alarm documentation"
+          }
+        }
+      ],
+      "refs_by_round": [
+        [
+          "src_1",
+          "src_2",
+          "src_3",
+          "src_4"
+        ],
+        [
+          "src_1",
+          "src_2",
+          "src_3",
+          "src_4",
+          "src_5"
+        ]
+      ],
+      "refs_append_only": true,
+      "new_refs_after_first_tool": [
+        "src_5"
+      ],
+      "document_refs": [
+        "src_5"
+      ],
+      "document_ref_used": false,
+      "cited_refs": [],
+      "validation_retries": 0,
+      "transport_retries": 0,
+      "requests": 2,
+      "tokens": {
+        "prompt_tokens": 1920,
+        "completion_tokens": 147,
+        "total_tokens": 2067
+      },
+      "duration_seconds": 4.227,
+      "schema_valid": false,
+      "automatic_evaluation": null,
+      "human_review_required": true,
+      "result": null,
+      "transport_failure": {
+        "type": "CLIENT_ERROR",
+        "status": 400,
+        "retryability": "NON_RETRYABLE",
+        "request_id": null
+      },
+      "rate_limited": false
+    },
+    {
+      "case_id": "T1",
+      "title": "Evidência forte sem confirmação",
+      "domain": "motor elétrico",
+      "problem_input": "Ruído e vibração acima do padrão no lado do acionamento, sem parada automática.",
+      "provided_facts": [
+        "Rotação estável em 1480 rpm."
+      ],
+      "provided_evidence": [
+        "Vibração radial RMS medida em 7,8 mm/s; referência histórica da mesma posição: 3,1 mm/s."
+      ],
+      "trap": [
+        "Tratar a vibração elevada como suporte, não como diagnóstico confirmado.",
+        "Separar a rotação estável da hipótese de rolamento."
+      ],
+      "expected_behavior": [
+        "Propor verificação discriminante de vibração/rolamento.",
+        "Explicar como o check reduz a incerteza."
+      ],
+      "orchestrator_status": "PRODUCER_ERROR",
+      "rounds": 2,
+      "tools": [],
+      "refs_by_round": [
+        [
+          "src_1",
+          "src_2",
+          "src_3",
+          "src_4",
+          "src_5"
+        ],
+        [
+          "src_1",
+          "src_2",
+          "src_3",
+          "src_4",
+          "src_5"
+        ]
+      ],
+      "refs_append_only": true,
+      "new_refs_after_first_tool": [],
+      "document_refs": [],
+      "document_ref_used": false,
+      "cited_refs": [],
+      "validation_retries": 1,
+      "transport_retries": 1,
+      "requests": 3,
+      "tokens": {
+        "prompt_tokens": 2015,
+        "completion_tokens": 1711,
+        "total_tokens": 3726
+      },
+      "duration_seconds": 7.394,
+      "schema_valid": false,
+      "automatic_evaluation": null,
+      "human_review_required": true,
+      "result": null,
+      "transport_failure": {
+        "type": "RATE_LIMIT",
+        "status": 429,
+        "retryability": "RETRYABLE",
+        "request_id": null
+      },
+      "rate_limited": true
+    }
+  ]
+}

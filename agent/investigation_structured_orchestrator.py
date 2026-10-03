@@ -52,9 +52,11 @@ class StructuredExecutionStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ValidationFailureAudit:
+    round_number: int
     attempt: int
     category: ProducerFailureCategory
     path: str | None
+    instruction: str
 
 
 @dataclass(frozen=True)
@@ -201,12 +203,14 @@ class StructuredInvestigationOrchestrator:
                 )
             except (ContractParseError, ContractValidationError) as error:
                 category = classify_contract_exception(error)
-                path = getattr(error, "path", None)
+                safe_feedback = safe_validation_feedback(error)
                 validation_audit.append(
                     ValidationFailureAudit(
+                        round_number=rounds,
                         attempt=validation_attempts,
                         category=category,
-                        path=path if isinstance(path, str) else None,
+                        path=safe_feedback.get("path"),
+                        instruction=safe_feedback["instruction"],
                     )
                 )
                 disposition = recommended_retry(
@@ -217,7 +221,7 @@ class StructuredInvestigationOrchestrator:
                     disposition is RetryDisposition.CONDITIONAL
                     and validation_attempts <= self.max_validation_retries
                 ):
-                    feedback = safe_validation_feedback(error)
+                    feedback = safe_feedback
                     continue
                 return self._execution(
                     StructuredExecutionStatus.VALIDATION_FAILED,

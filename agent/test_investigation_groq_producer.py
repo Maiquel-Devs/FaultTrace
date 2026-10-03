@@ -35,13 +35,14 @@ from .investigation_structured_tools import StructuredInvestigationToolRegistry
 from .models import AgentInteraction
 
 
-def _response(*, content=None, tool_calls=(), usage=True):
+def _response(*, content=None, tool_calls=(), usage=True, reasoning=None):
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
                 message=SimpleNamespace(
                     content=content,
                     tool_calls=list(tool_calls),
+                    reasoning=reasoning,
                 )
             )
         ],
@@ -308,6 +309,38 @@ class GroqStructuredProducerAdapterTests(TestCase):
             assistant["tool_calls"][0]["id"], "native-roundtrip-id"
         )
         self.assertEqual(tool_result["tool_call_id"], "native-roundtrip-id")
+
+    def test_tool_protocol_continuity_preserves_gpt_oss_reasoning_field(self):
+        native = _native_tool(
+            "search_documentation",
+            '{"query":"alarme térmico"}',
+            call_id="native-reasoning-id",
+        )
+        _, create = self._sdk(
+            response=_response(
+                tool_calls=(native,),
+                reasoning="provider reasoning required for continuation",
+            )
+        )
+        producer = self._producer()
+
+        producer.produce(self.producer_input)
+        producer.produce(
+            StructuredProducerInput(
+                request=self.producer_input.request,
+                context=self.producer_input.context,
+                schema=self.producer_input.schema,
+                tools=self.producer_input.tools,
+                round_number=2,
+            )
+        )
+
+        messages = create.call_args_list[1].kwargs["messages"]
+        assistant = next(item for item in messages if item["role"] == "assistant")
+        self.assertEqual(
+            assistant["reasoning"],
+            "provider reasoning required for continuation",
+        )
 
     def test_validation_feedback_is_sent_without_previous_raw_output(self):
         invalid_raw = "sensitive-invalid-raw-output"
